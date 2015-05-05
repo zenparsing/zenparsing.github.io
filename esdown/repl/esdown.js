@@ -1605,12 +1605,12 @@ InstallFunctions($Promise.prototype, DONT_ENUM, [
 
 (function() {
 
-var Sink = _esdown.class(function(__) { var Sink;
+var ObserverSink = _esdown.class(function(__) { var ObserverSink;
 
-    __({ constructor: Sink = function(observer) {
+    __({ constructor: ObserverSink = function(observer) {
 
         this.done = false;
-        this.cleanup = undefined;
+        this.controller = undefined;
         this.observer = observer;
     },
 
@@ -1618,8 +1618,8 @@ var Sink = _esdown.class(function(__) { var Sink;
 
         this.done = true;
 
-        if (this.cleanup)
-            this.cleanup.call(undefined);
+        if (this.controller && "stop" in this.controller)
+            this.controller.stop();
     },
 
     next: function(value) {
@@ -1696,45 +1696,122 @@ var Sink = _esdown.class(function(__) { var Sink;
 
 var Observable = _esdown.class(function(__) { var Observable;
 
-    __({ constructor: Observable = function(start) {
+    __({ constructor: Observable = function(init) {
 
         // The stream initializer must be a function
-        if (typeof start !== "function")
-            throw new TypeError("Observer definition is not a function");
+        if (typeof init !== "function")
+            throw new TypeError("Observable initializer must be a function");
 
-        this._start = start;
+        this._init = init;
     },
 
     subscribe: function(observer) {
 
         // The sink must be an object
         if (Object(observer) !== observer)
-            throw new TypeError("Observer is not an object");
+            throw new TypeError("Observer must be an object");
 
-        var sink = new Sink(observer);
+        var sink = new ObserverSink(observer),
+            controller;
 
         try {
 
-            // Call the stream initializer.  The initializer will return a cleanup
-            // function or undefined.
-            sink.cleanup = this._start.call(undefined,
-                function(x) { return sink.next(x); },
-                function(x) { return sink.throw(x); },
-                function(x) { return sink.return(x); });
+            // Call the stream initializer.  The initializer will return a
+            // stream controller or undefined.
+            controller = this._init.call(undefined, sink);
+
+            // The returned controller may be null or undefined
+            if (controller == null)
+                controller = {};
+
+            // The controller must be an object
+            if (Object(controller) !== controller)
+                throw new TypeError("Stream controller must be an object");
+
+            if ("start" in controller)
+                controller.start();
 
         } catch (e) {
 
-            // If an error occurs during the initializer, then send an error
-            // to the sink
+            // If an error occurs during startup, then send an error
+            // to the sink and rethrow error to caller.
             sink.throw(e);
+            throw e;
         }
 
         // If the stream is already finished, then perform cleanup
-        if (sink.done && sink.cleanup !== undefined)
-            sink.cleanup.call(undefined);
+        if (sink.done && "stop" in controller)
+            controller.stop();
 
-        // Return a cancelation function
-        return function(_) { sink.return() };
+        sink.controller = controller;
+
+        // Return a cancellation function
+        return function(_) {
+
+            if ("cancel" in controller) controller.cancel();
+            else sink.return();
+        };
+    },
+
+    forEach: function(fn) { var __this = this; 
+
+        return new Promise(function(resolve, reject) {
+
+            __this.subscribe({
+
+                next: fn,
+                throw: reject,
+                return: resolve,
+            });
+        });
+    },
+
+    map: function(fn) { var __this = this; 
+
+        if (typeof fn !== "function")
+            throw new TypeError(fn + " is not a function");
+
+        return new this.constructor(function(sink) { return ({
+
+            stop: __this.subscribe({
+
+                next: function(value) {
+
+                    try { value = fn(value) }
+                    catch (e) { return sink.throw(e) }
+
+                    return sink.next(value);
+                },
+
+                throw: function(value) { return sink.throw(value) },
+                return: function(value) { return sink.return(value) },
+            })
+
+        }); });
+    },
+
+    filter: function(fn) { var __this = this; 
+
+        if (typeof fn !== "function")
+            throw new TypeError(fn + " is not a function");
+
+        return new this.constructor(function(sink) { return ({
+
+            stop: __this.subscribe({
+
+                next: function(value) {
+
+                    try { if (!fn(value)) return { done: false } }
+                    catch (e) { return sink.throw(e) }
+
+                    return sink.next(value);
+                },
+
+                throw: function(value) { return sink.throw(value) },
+                return: function(value) { return sink.return(value) },
+            })
+
+        }); });
     }});
 
     __(_esdown.computed({}, Symbol.asyncIterator, { _: function() { return _esdown.asyncGen(function*() {
@@ -1777,40 +1854,6 @@ var Observable = _esdown.class(function(__) { var Observable;
             cancel();
         }
     }.apply(this, arguments)); } }));
-
-    __({ forEach: function(fn) { var __this = this; 
-
-        return new Promise(function(resolve, reject) {
-
-            __this.subscribe({
-
-                next: fn,
-                throw: reject,
-                return: resolve,
-            });
-        });
-    },
-
-    map: function(fn) { var __this = this; 
-
-        if (typeof fn !== "function")
-            throw new TypeError("Callback is not a function");
-
-        return new this.constructor(function(push, error, close) { return __this.subscribe({
-
-            next: function(value) {
-
-                try { value = fn(value) }
-                catch (e) { return error(e) }
-
-                return push(value);
-            },
-
-            throw: error,
-            return: close,
-
-        }); });
-    }});
 
  });
 
@@ -10287,12 +10330,12 @@ InstallFunctions($Promise.prototype, DONT_ENUM, [\n\
 
 Runtime.Observable = 
 
-"class Sink {\n\
+"class ObserverSink {\n\
 \n\
     constructor(observer) {\n\
 \n\
         this.done = false;\n\
-        this.cleanup = undefined;\n\
+        this.controller = undefined;\n\
         this.observer = observer;\n\
     }\n\
 \n\
@@ -10300,8 +10343,8 @@ Runtime.Observable =
 \n\
         this.done = true;\n\
 \n\
-        if (this.cleanup)\n\
-            this.cleanup.call(undefined);\n\
+        if (this.controller && \"stop\" in this.controller)\n\
+            this.controller.stop();\n\
     }\n\
 \n\
     next(value) {\n\
@@ -10378,45 +10421,122 @@ Runtime.Observable =
 \n\
 class Observable {\n\
 \n\
-    constructor(start) {\n\
+    constructor(init) {\n\
 \n\
         // The stream initializer must be a function\n\
-        if (typeof start !== \"function\")\n\
-            throw new TypeError(\"Observer definition is not a function\");\n\
+        if (typeof init !== \"function\")\n\
+            throw new TypeError(\"Observable initializer must be a function\");\n\
 \n\
-        this._start = start;\n\
+        this._init = init;\n\
     }\n\
 \n\
     subscribe(observer) {\n\
 \n\
         // The sink must be an object\n\
         if (Object(observer) !== observer)\n\
-            throw new TypeError(\"Observer is not an object\");\n\
+            throw new TypeError(\"Observer must be an object\");\n\
 \n\
-        let sink = new Sink(observer);\n\
+        let sink = new ObserverSink(observer),\n\
+            controller;\n\
 \n\
         try {\n\
 \n\
-            // Call the stream initializer.  The initializer will return a cleanup\n\
-            // function or undefined.\n\
-            sink.cleanup = this._start.call(undefined,\n\
-                x => sink.next(x),\n\
-                x => sink.throw(x),\n\
-                x => sink.return(x));\n\
+            // Call the stream initializer.  The initializer will return a\n\
+            // stream controller or undefined.\n\
+            controller = this._init.call(undefined, sink);\n\
+\n\
+            // The returned controller may be null or undefined\n\
+            if (controller == null)\n\
+                controller = {};\n\
+\n\
+            // The controller must be an object\n\
+            if (Object(controller) !== controller)\n\
+                throw new TypeError(\"Stream controller must be an object\");\n\
+\n\
+            if (\"start\" in controller)\n\
+                controller.start();\n\
 \n\
         } catch (e) {\n\
 \n\
-            // If an error occurs during the initializer, then send an error\n\
-            // to the sink\n\
+            // If an error occurs during startup, then send an error\n\
+            // to the sink and rethrow error to caller.\n\
             sink.throw(e);\n\
+            throw e;\n\
         }\n\
 \n\
         // If the stream is already finished, then perform cleanup\n\
-        if (sink.done && sink.cleanup !== undefined)\n\
-            sink.cleanup.call(undefined);\n\
+        if (sink.done && \"stop\" in controller)\n\
+            controller.stop();\n\
 \n\
-        // Return a cancelation function\n\
-        return _=> { sink.return() };\n\
+        sink.controller = controller;\n\
+\n\
+        // Return a cancellation function\n\
+        return _=> {\n\
+\n\
+            if (\"cancel\" in controller) controller.cancel();\n\
+            else sink.return();\n\
+        };\n\
+    }\n\
+\n\
+    forEach(fn) {\n\
+\n\
+        return new Promise((resolve, reject) => {\n\
+\n\
+            this.subscribe({\n\
+\n\
+                next: fn,\n\
+                throw: reject,\n\
+                return: resolve,\n\
+            });\n\
+        });\n\
+    }\n\
+\n\
+    map(fn) {\n\
+\n\
+        if (typeof fn !== \"function\")\n\
+            throw new TypeError(fn + \" is not a function\");\n\
+\n\
+        return new this.constructor(sink => ({\n\
+\n\
+            stop: this.subscribe({\n\
+\n\
+                next(value) {\n\
+\n\
+                    try { value = fn(value) }\n\
+                    catch (e) { return sink.throw(e) }\n\
+\n\
+                    return sink.next(value);\n\
+                },\n\
+\n\
+                throw(value) { return sink.throw(value) },\n\
+                return(value) { return sink.return(value) },\n\
+            })\n\
+\n\
+        }));\n\
+    }\n\
+\n\
+    filter(fn) {\n\
+\n\
+        if (typeof fn !== \"function\")\n\
+            throw new TypeError(fn + \" is not a function\");\n\
+\n\
+        return new this.constructor(sink => ({\n\
+\n\
+            stop: this.subscribe({\n\
+\n\
+                next(value) {\n\
+\n\
+                    try { if (!fn(value)) return { done: false } }\n\
+                    catch (e) { return sink.throw(e) }\n\
+\n\
+                    return sink.next(value);\n\
+                },\n\
+\n\
+                throw(value) { return sink.throw(value) },\n\
+                return(value) { return sink.return(value) },\n\
+            })\n\
+\n\
+        }));\n\
     }\n\
 \n\
     async *[Symbol.asyncIterator]() {\n\
@@ -10458,40 +10578,6 @@ class Observable {\n\
 \n\
             cancel();\n\
         }\n\
-    }\n\
-\n\
-    forEach(fn) {\n\
-\n\
-        return new Promise((resolve, reject) => {\n\
-\n\
-            this.subscribe({\n\
-\n\
-                next: fn,\n\
-                throw: reject,\n\
-                return: resolve,\n\
-            });\n\
-        });\n\
-    }\n\
-\n\
-    map(fn) {\n\
-\n\
-        if (typeof fn !== \"function\")\n\
-            throw new TypeError(\"Callback is not a function\");\n\
-\n\
-        return new this.constructor((push, error, close) => this.subscribe({\n\
-\n\
-            next(value) {\n\
-\n\
-                try { value = fn(value) }\n\
-                catch (e) { return error(e) }\n\
-\n\
-                return push(value);\n\
-            },\n\
-\n\
-            throw: error,\n\
-            return: close,\n\
-\n\
-        }));\n\
     }\n\
 \n\
 }\n\

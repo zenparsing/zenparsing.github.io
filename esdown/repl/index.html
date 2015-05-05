@@ -382,7 +382,7 @@ window.onload = function() { "use strict";
         var message = "" + error,
             stack = message;
 
-        if ("stack" in error) {
+        if (error.stack) {
 
             stack = error.stack;
 
@@ -716,6 +716,11 @@ window.onload = function() { "use strict";
             consoleLog.apply(this, arguments);
         };
     }
+
+    window.onerror = function(error) {
+
+        addLine(formatError(error));
+    };
 
     loadFromHash();
 
