@@ -1,7 +1,7 @@
 /*=esdown=*/(function(fn, deps, name) { function obj() { return {} } if (typeof exports !== 'undefined') fn(require, exports, module); else if (typeof define === 'function' && define.amd) define(['require', 'exports', 'module'].concat(deps), fn); else if (typeof window !== 'undefined' && name) fn(obj, window[name] = {}, {}); else fn(obj, {}, {}); })(function(require, exports, module) { 'use strict'; function __load(p, l) { module.__es6 = !l; var e = require(p); if (e && e.constructor !== Object) e.default = e; return e; } 
 (function() {
 
-var VERSION = "0.9.7";
+var VERSION = "0.9.8";
 
 var Global = (function() {
 
@@ -520,11 +520,13 @@ polyfill(Symbol, {
 
     iterator: Symbol("iterator"),
 
+    species: Symbol("species"),
+
     // Experimental async iterator support
     asyncIterator: Symbol("asyncIterator"),
 
-    // Experimental async observation support
-    observe: Symbol("observe")
+    // Experimental observable support
+    observable: Symbol("observable"),
 
 });
 
@@ -1609,23 +1611,23 @@ var ObserverSink = _esdown.class(function(__) { var ObserverSink;
 
     __({ constructor: ObserverSink = function(observer) {
 
-        this.done = false;
-        this.controller = undefined;
-        this.observer = observer;
+        this._done = false;
+        this._terminate = undefined;
+        this._observer = observer;
     },
 
-    close: function() {
+    _close: function() {
 
-        this.done = true;
+        this._done = true;
 
-        if (this.controller && "stop" in this.controller)
-            this.controller.stop();
+        if (this._terminate)
+            this._terminate.call(undefined);
     },
 
     next: function(value) {
 
         // If the stream if closed, then return a "done" result
-        if (this.done)
+        if (this._done)
             return { done: true };
 
         var result;
@@ -1633,18 +1635,18 @@ var ObserverSink = _esdown.class(function(__) { var ObserverSink;
         try {
 
             // Send the next value to the sink
-            result = this.observer.next(value);
+            result = this._observer.next(value);
 
         } catch (e) {
 
             // If the observer throws, then close the stream and rethrow the error
-            this.close();
+            this._close();
             throw e;
         }
 
         // Cleanup if sink is closed
-        if (result && result.done)
-            this.close();
+        if (result && result._done)
+            this._close();
 
         return result;
     },
@@ -1652,44 +1654,44 @@ var ObserverSink = _esdown.class(function(__) { var ObserverSink;
     throw: function(value) {
 
         // If the stream is closed, throw the error to the caller
-        if (this.done)
+        if (this._done)
             throw value;
 
-        this.done = true;
+        this._done = true;
 
         try {
 
             // If the sink does not support "throw", then throw the error to the caller
-            if (!("throw" in this.observer))
+            if (!("throw" in this._observer))
                 throw value;
 
-            return this.observer.throw(value);
+            return this._observer.throw(value);
 
         } finally {
 
-            this.close();
+            this._close();
         }
     },
 
     return: function(value) {
 
         // If the stream is closed, then return a done result
-        if (this.done)
+        if (this._done)
             return { done: true };
 
-        this.done = true;
+        this._done = true;
 
         try {
 
             // If the sink does not support "return", then return a done result
-            if (!("return" in this.observer))
+            if (!("return" in this._observer))
                 return { done: true };
 
-            return this.observer.return(value);
+            return this._observer.return(value);
 
         } finally {
 
-            this.close();
+            this._close();
         }
     }});
  });
@@ -1712,24 +1714,16 @@ var Observable = _esdown.class(function(__) { var Observable;
             throw new TypeError("Observer must be an object");
 
         var sink = new ObserverSink(observer),
-            controller;
+            terminate;
 
         try {
 
-            // Call the stream initializer.  The initializer will return a
-            // stream controller or undefined.
-            controller = this._init.call(undefined, sink);
+            // Call the stream initializer
+            terminate = this._init.call(undefined, sink);
 
-            // The returned controller may be null or undefined
-            if (controller == null)
-                controller = {};
-
-            // The controller must be an object
-            if (Object(controller) !== controller)
-                throw new TypeError("Stream controller must be an object");
-
-            if ("start" in controller)
-                controller.start();
+            // The return value must be a function or null or undefined
+            if (terminate != null && typeof terminate !== "function")
+                throw new TypeError(terminate + " is not a function");
 
         } catch (e) {
 
@@ -1740,17 +1734,14 @@ var Observable = _esdown.class(function(__) { var Observable;
         }
 
         // If the stream is already finished, then perform cleanup
-        if (sink.done && "stop" in controller)
-            controller.stop();
+        if (sink._done && terminate)
+            terminate();
 
-        sink.controller = controller;
+        sink._terminate = terminate;
 
-        // Return a cancellation function
-        return function(_) {
-
-            if ("cancel" in controller) controller.cancel();
-            else sink.return();
-        };
+        // Return a cancellation function.  The default cancellation function
+        // will simply call return the observer.
+        return terminate || (function(_) { sink.return() });
     },
 
     forEach: function(fn) { var __this = this; 
@@ -1771,22 +1762,18 @@ var Observable = _esdown.class(function(__) { var Observable;
         if (typeof fn !== "function")
             throw new TypeError(fn + " is not a function");
 
-        return new this.constructor(function(sink) { return ({
+        return new this.constructor[Symbol.species](function(sink) { return __this.subscribe({
 
-            stop: __this.subscribe({
+            next: function(value) {
 
-                next: function(value) {
+                try { value = fn(value) }
+                catch (e) { return sink.throw(e) }
 
-                    try { value = fn(value) }
-                    catch (e) { return sink.throw(e) }
+                return sink.next(value);
+            },
 
-                    return sink.next(value);
-                },
-
-                throw: function(value) { return sink.throw(value) },
-                return: function(value) { return sink.return(value) },
-            })
-
+            throw: function(value) { return sink.throw(value) },
+            return: function(value) { return sink.return(value) },
         }); });
     },
 
@@ -1795,24 +1782,24 @@ var Observable = _esdown.class(function(__) { var Observable;
         if (typeof fn !== "function")
             throw new TypeError(fn + " is not a function");
 
-        return new this.constructor(function(sink) { return ({
+        return new this.constructor[Symbol.species](function(sink) { return __this.subscribe({
 
-            stop: __this.subscribe({
+            next: function(value) {
 
-                next: function(value) {
+                try { if (!fn(value)) return { done: false } }
+                catch (e) { return sink.throw(e) }
 
-                    try { if (!fn(value)) return { done: false } }
-                    catch (e) { return sink.throw(e) }
+                return sink.next(value);
+            },
 
-                    return sink.next(value);
-                },
-
-                throw: function(value) { return sink.throw(value) },
-                return: function(value) { return sink.return(value) },
-            })
-
+            throw: function(value) { return sink.throw(value) },
+            return: function(value) { return sink.return(value) },
         }); });
     }});
+
+    __(_esdown.computed({}, Symbol.observable, { _: function() { return this } }));
+
+    __.static(_esdown.computed({}, Symbol.species, { get _() { return this } }));
 
     __(_esdown.computed({}, Symbol.asyncIterator, { _: function() { return _esdown.asyncGen(function*() {
 
@@ -8734,7 +8721,7 @@ var Runtime = {};
 
 Runtime.API = 
 
-"const VERSION = \"0.9.7\";\n\
+"const VERSION = \"0.9.8\";\n\
 \n\
 let Global = (function() {\n\
 \n\
@@ -9251,11 +9238,13 @@ polyfill(Symbol, {\n\
 \n\
     iterator: Symbol(\"iterator\"),\n\
 \n\
+    species: Symbol(\"species\"),\n\
+\n\
     // Experimental async iterator support\n\
     asyncIterator: Symbol(\"asyncIterator\"),\n\
 \n\
-    // Experimental async observation support\n\
-    observe: Symbol(\"observe\")\n\
+    // Experimental observable support\n\
+    observable: Symbol(\"observable\"),\n\
 \n\
 });\n\
 \n\
@@ -10334,23 +10323,23 @@ Runtime.Observable =
 \n\
     constructor(observer) {\n\
 \n\
-        this.done = false;\n\
-        this.controller = undefined;\n\
-        this.observer = observer;\n\
+        this._done = false;\n\
+        this._terminate = undefined;\n\
+        this._observer = observer;\n\
     }\n\
 \n\
-    close() {\n\
+    _close() {\n\
 \n\
-        this.done = true;\n\
+        this._done = true;\n\
 \n\
-        if (this.controller && \"stop\" in this.controller)\n\
-            this.controller.stop();\n\
+        if (this._terminate)\n\
+            this._terminate.call(undefined);\n\
     }\n\
 \n\
     next(value) {\n\
 \n\
         // If the stream if closed, then return a \"done\" result\n\
-        if (this.done)\n\
+        if (this._done)\n\
             return { done: true };\n\
 \n\
         let result;\n\
@@ -10358,18 +10347,18 @@ Runtime.Observable =
         try {\n\
 \n\
             // Send the next value to the sink\n\
-            result = this.observer.next(value);\n\
+            result = this._observer.next(value);\n\
 \n\
         } catch (e) {\n\
 \n\
             // If the observer throws, then close the stream and rethrow the error\n\
-            this.close();\n\
+            this._close();\n\
             throw e;\n\
         }\n\
 \n\
         // Cleanup if sink is closed\n\
-        if (result && result.done)\n\
-            this.close();\n\
+        if (result && result._done)\n\
+            this._close();\n\
 \n\
         return result;\n\
     }\n\
@@ -10377,44 +10366,44 @@ Runtime.Observable =
     throw(value) {\n\
 \n\
         // If the stream is closed, throw the error to the caller\n\
-        if (this.done)\n\
+        if (this._done)\n\
             throw value;\n\
 \n\
-        this.done = true;\n\
+        this._done = true;\n\
 \n\
         try {\n\
 \n\
             // If the sink does not support \"throw\", then throw the error to the caller\n\
-            if (!(\"throw\" in this.observer))\n\
+            if (!(\"throw\" in this._observer))\n\
                 throw value;\n\
 \n\
-            return this.observer.throw(value);\n\
+            return this._observer.throw(value);\n\
 \n\
         } finally {\n\
 \n\
-            this.close();\n\
+            this._close();\n\
         }\n\
     }\n\
 \n\
     return(value) {\n\
 \n\
         // If the stream is closed, then return a done result\n\
-        if (this.done)\n\
+        if (this._done)\n\
             return { done: true };\n\
 \n\
-        this.done = true;\n\
+        this._done = true;\n\
 \n\
         try {\n\
 \n\
             // If the sink does not support \"return\", then return a done result\n\
-            if (!(\"return\" in this.observer))\n\
+            if (!(\"return\" in this._observer))\n\
                 return { done: true };\n\
 \n\
-            return this.observer.return(value);\n\
+            return this._observer.return(value);\n\
 \n\
         } finally {\n\
 \n\
-            this.close();\n\
+            this._close();\n\
         }\n\
     }\n\
 }\n\
@@ -10437,24 +10426,16 @@ class Observable {\n\
             throw new TypeError(\"Observer must be an object\");\n\
 \n\
         let sink = new ObserverSink(observer),\n\
-            controller;\n\
+            terminate;\n\
 \n\
         try {\n\
 \n\
-            // Call the stream initializer.  The initializer will return a\n\
-            // stream controller or undefined.\n\
-            controller = this._init.call(undefined, sink);\n\
+            // Call the stream initializer\n\
+            terminate = this._init.call(undefined, sink);\n\
 \n\
-            // The returned controller may be null or undefined\n\
-            if (controller == null)\n\
-                controller = {};\n\
-\n\
-            // The controller must be an object\n\
-            if (Object(controller) !== controller)\n\
-                throw new TypeError(\"Stream controller must be an object\");\n\
-\n\
-            if (\"start\" in controller)\n\
-                controller.start();\n\
+            // The return value must be a function or null or undefined\n\
+            if (terminate != null && typeof terminate !== \"function\")\n\
+                throw new TypeError(terminate + \" is not a function\");\n\
 \n\
         } catch (e) {\n\
 \n\
@@ -10465,17 +10446,14 @@ class Observable {\n\
         }\n\
 \n\
         // If the stream is already finished, then perform cleanup\n\
-        if (sink.done && \"stop\" in controller)\n\
-            controller.stop();\n\
+        if (sink._done && terminate)\n\
+            terminate();\n\
 \n\
-        sink.controller = controller;\n\
+        sink._terminate = terminate;\n\
 \n\
-        // Return a cancellation function\n\
-        return _=> {\n\
-\n\
-            if (\"cancel\" in controller) controller.cancel();\n\
-            else sink.return();\n\
-        };\n\
+        // Return a cancellation function.  The default cancellation function\n\
+        // will simply call return the observer.\n\
+        return terminate || (_=> { sink.return() });\n\
     }\n\
 \n\
     forEach(fn) {\n\
@@ -10496,22 +10474,18 @@ class Observable {\n\
         if (typeof fn !== \"function\")\n\
             throw new TypeError(fn + \" is not a function\");\n\
 \n\
-        return new this.constructor(sink => ({\n\
+        return new this.constructor[Symbol.species](sink => this.subscribe({\n\
 \n\
-            stop: this.subscribe({\n\
+            next(value) {\n\
 \n\
-                next(value) {\n\
+                try { value = fn(value) }\n\
+                catch (e) { return sink.throw(e) }\n\
 \n\
-                    try { value = fn(value) }\n\
-                    catch (e) { return sink.throw(e) }\n\
+                return sink.next(value);\n\
+            },\n\
 \n\
-                    return sink.next(value);\n\
-                },\n\
-\n\
-                throw(value) { return sink.throw(value) },\n\
-                return(value) { return sink.return(value) },\n\
-            })\n\
-\n\
+            throw(value) { return sink.throw(value) },\n\
+            return(value) { return sink.return(value) },\n\
         }));\n\
     }\n\
 \n\
@@ -10520,24 +10494,24 @@ class Observable {\n\
         if (typeof fn !== \"function\")\n\
             throw new TypeError(fn + \" is not a function\");\n\
 \n\
-        return new this.constructor(sink => ({\n\
+        return new this.constructor[Symbol.species](sink => this.subscribe({\n\
 \n\
-            stop: this.subscribe({\n\
+            next(value) {\n\
 \n\
-                next(value) {\n\
+                try { if (!fn(value)) return { done: false } }\n\
+                catch (e) { return sink.throw(e) }\n\
 \n\
-                    try { if (!fn(value)) return { done: false } }\n\
-                    catch (e) { return sink.throw(e) }\n\
+                return sink.next(value);\n\
+            },\n\
 \n\
-                    return sink.next(value);\n\
-                },\n\
-\n\
-                throw(value) { return sink.throw(value) },\n\
-                return(value) { return sink.return(value) },\n\
-            })\n\
-\n\
+            throw(value) { return sink.throw(value) },\n\
+            return(value) { return sink.return(value) },\n\
         }));\n\
     }\n\
+\n\
+    [Symbol.observable]() { return this }\n\
+\n\
+    static get [Symbol.species]() { return this }\n\
 \n\
     async *[Symbol.asyncIterator]() {\n\
 \n\
