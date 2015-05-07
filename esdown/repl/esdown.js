@@ -1,7 +1,7 @@
 /*=esdown=*/(function(fn, deps, name) { function obj() { return {} } if (typeof exports !== 'undefined') fn(require, exports, module); else if (typeof define === 'function' && define.amd) define(['require', 'exports', 'module'].concat(deps), fn); else if (typeof window !== 'undefined' && name) fn(obj, window[name] = {}, {}); else fn(obj, {}, {}); })(function(require, exports, module) { 'use strict'; function __load(p, l) { module.__es6 = !l; var e = require(p); if (e && e.constructor !== Object) e.default = e; return e; } 
 (function() {
 
-var VERSION = "0.9.8";
+var VERSION = "0.9.9";
 
 var Global = (function() {
 
@@ -1612,16 +1612,22 @@ var ObserverSink = _esdown.class(function(__) { var ObserverSink;
     __({ constructor: ObserverSink = function(observer) {
 
         this._done = false;
-        this._terminate = undefined;
+        this._stop = null;
         this._observer = observer;
     },
 
-    _close: function() {
+    _close: function(done) {
 
-        this._done = true;
+        if (done)
+            this._done = true;
 
-        if (this._terminate)
-            this._terminate.call(undefined);
+        if (this._stop) {
+
+            // Call the termination function and drop the reference to it.
+            // We must not call the termination function more than once.
+            this._stop.call(undefined);
+            this._stop = null;
+        }
     },
 
     next: function(value) {
@@ -1640,13 +1646,13 @@ var ObserverSink = _esdown.class(function(__) { var ObserverSink;
         } catch (e) {
 
             // If the observer throws, then close the stream and rethrow the error
-            this._close();
+            this._close(true);
             throw e;
         }
 
         // Cleanup if sink is closed
-        if (result && result._done)
-            this._close();
+        if (result && result.done)
+            this._close(true);
 
         return result;
     },
@@ -1714,34 +1720,34 @@ var Observable = _esdown.class(function(__) { var Observable;
             throw new TypeError("Observer must be an object");
 
         var sink = new ObserverSink(observer),
-            terminate;
+            stop;
 
         try {
 
             // Call the stream initializer
-            terminate = this._init.call(undefined, sink);
+            stop = this._init.call(undefined, sink);
 
             // The return value must be a function or null or undefined
-            if (terminate != null && typeof terminate !== "function")
-                throw new TypeError(terminate + " is not a function");
+            if (stop != null && typeof stop !== "function")
+                throw new TypeError(stop + " is not a function");
 
         } catch (e) {
 
             // If an error occurs during startup, then send an error
             // to the sink and rethrow error to caller.
             sink.throw(e);
-            throw e;
+            throw e; // TODO:  Should we re-throw here?
         }
 
-        // If the stream is already finished, then perform cleanup
-        if (sink._done && terminate)
-            terminate();
+        sink._stop = stop;
 
-        sink._terminate = terminate;
+        // If the stream is already finished, then perform cleanup
+        if (sink._done)
+            sink._close();
 
         // Return a cancellation function.  The default cancellation function
-        // will simply call return the observer.
-        return terminate || (function(_) { sink.return() });
+        // will simply call return on the observer.
+        return function(_) { sink._close() };
     },
 
     forEach: function(fn) { var __this = this; 
@@ -8721,7 +8727,7 @@ var Runtime = {};
 
 Runtime.API = 
 
-"const VERSION = \"0.9.8\";\n\
+"const VERSION = \"0.9.9\";\n\
 \n\
 let Global = (function() {\n\
 \n\
@@ -10324,16 +10330,22 @@ Runtime.Observable =
     constructor(observer) {\n\
 \n\
         this._done = false;\n\
-        this._terminate = undefined;\n\
+        this._stop = null;\n\
         this._observer = observer;\n\
     }\n\
 \n\
-    _close() {\n\
+    _close(done) {\n\
 \n\
-        this._done = true;\n\
+        if (done)\n\
+            this._done = true;\n\
 \n\
-        if (this._terminate)\n\
-            this._terminate.call(undefined);\n\
+        if (this._stop) {\n\
+\n\
+            // Call the termination function and drop the reference to it.\n\
+            // We must not call the termination function more than once.\n\
+            this._stop.call(undefined);\n\
+            this._stop = null;\n\
+        }\n\
     }\n\
 \n\
     next(value) {\n\
@@ -10352,13 +10364,13 @@ Runtime.Observable =
         } catch (e) {\n\
 \n\
             // If the observer throws, then close the stream and rethrow the error\n\
-            this._close();\n\
+            this._close(true);\n\
             throw e;\n\
         }\n\
 \n\
         // Cleanup if sink is closed\n\
-        if (result && result._done)\n\
-            this._close();\n\
+        if (result && result.done)\n\
+            this._close(true);\n\
 \n\
         return result;\n\
     }\n\
@@ -10426,34 +10438,34 @@ class Observable {\n\
             throw new TypeError(\"Observer must be an object\");\n\
 \n\
         let sink = new ObserverSink(observer),\n\
-            terminate;\n\
+            stop;\n\
 \n\
         try {\n\
 \n\
             // Call the stream initializer\n\
-            terminate = this._init.call(undefined, sink);\n\
+            stop = this._init.call(undefined, sink);\n\
 \n\
             // The return value must be a function or null or undefined\n\
-            if (terminate != null && typeof terminate !== \"function\")\n\
-                throw new TypeError(terminate + \" is not a function\");\n\
+            if (stop != null && typeof stop !== \"function\")\n\
+                throw new TypeError(stop + \" is not a function\");\n\
 \n\
         } catch (e) {\n\
 \n\
             // If an error occurs during startup, then send an error\n\
             // to the sink and rethrow error to caller.\n\
             sink.throw(e);\n\
-            throw e;\n\
+            throw e; // TODO:  Should we re-throw here?\n\
         }\n\
 \n\
-        // If the stream is already finished, then perform cleanup\n\
-        if (sink._done && terminate)\n\
-            terminate();\n\
+        sink._stop = stop;\n\
 \n\
-        sink._terminate = terminate;\n\
+        // If the stream is already finished, then perform cleanup\n\
+        if (sink._done)\n\
+            sink._close();\n\
 \n\
         // Return a cancellation function.  The default cancellation function\n\
-        // will simply call return the observer.\n\
-        return terminate || (_=> { sink.return() });\n\
+        // will simply call return on the observer.\n\
+        return _=> { sink._close() };\n\
     }\n\
 \n\
     forEach(fn) {\n\
