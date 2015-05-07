@@ -1727,16 +1727,17 @@ var Observable = _esdown.class(function(__) { var Observable;
             // Call the stream initializer
             stop = this._init.call(undefined, sink);
 
-            // The return value must be a function or null or undefined
-            if (stop != null && typeof stop !== "function")
+            // If the return value is null or undefined, then use a default stop function
+            if (stop == null)
+                stop = (function(_) { return sink.return(); });
+            else if (typeof stop !== "function")
                 throw new TypeError(stop + " is not a function");
 
         } catch (e) {
 
-            // If an error occurs during startup, then send an error
-            // to the sink and rethrow error to caller.
+            // If an error occurs during startup, then attempt to send the error
+            // to the sink
             sink.throw(e);
-            throw e; // TODO:  Should we re-throw here?
         }
 
         sink._stop = stop;
@@ -5747,6 +5748,8 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
 
         options = options || {};
 
+        this.onASI = options.onASI || null;
+
         var scanner = new Scanner(input);
 
         this.scanner = scanner;
@@ -6964,8 +6967,19 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
         var token = this.peekToken(),
             type = token.type;
 
-        if (type === ";" || !(type === "}" || type === "EOF" || token.newlineBefore))
-            this.read(";");
+        if (type === ";") {
+
+            this.read();
+
+        } else if (type === "}" || type === "EOF" || token.newlineBefore) {
+
+            if (this.onASI && !this.onASI(token))
+                this.unexpected(token);
+
+        } else {
+
+            this.unexpected(token);
+        }
     },
 
     LabelledStatement: function() {
@@ -10445,16 +10459,17 @@ class Observable {\n\
             // Call the stream initializer\n\
             stop = this._init.call(undefined, sink);\n\
 \n\
-            // The return value must be a function or null or undefined\n\
-            if (stop != null && typeof stop !== \"function\")\n\
+            // If the return value is null or undefined, then use a default stop function\n\
+            if (stop == null)\n\
+                stop = (_=> sink.return());\n\
+            else if (typeof stop !== \"function\")\n\
                 throw new TypeError(stop + \" is not a function\");\n\
 \n\
         } catch (e) {\n\
 \n\
-            // If an error occurs during startup, then send an error\n\
-            // to the sink and rethrow error to caller.\n\
+            // If an error occurs during startup, then attempt to send the error\n\
+            // to the sink\n\
             sink.throw(e);\n\
-            throw e; // TODO:  Should we re-throw here?\n\
         }\n\
 \n\
         sink._stop = stop;\n\
@@ -10759,11 +10774,21 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
 
     __({ replace: function(input, options) { var __this = this; if (options === void 0) options = {}; 
 
+        this.asi = {};
+
         this.parseResult = parse(input, {
 
             module: options.module,
             addParentLinks: true,
-            resolveScopes: true
+            resolveScopes: true,
+
+            onASI: function(token) {
+
+                if (token.type !== "}" && token.type !== "EOF")
+                    __this.asi[token.start] = true;
+
+                return true;
+            }
         });
 
         var root = this.parseResult.ast;
@@ -10915,6 +10940,24 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
         return out;
     },
 
+    ExpressionStatement: function(node) {
+
+        if (this.asi[node.start]) {
+
+            var text$0 = this.stringify(node);
+
+            switch (text$0.charAt(0)) {
+
+                case "(":
+                case "[":
+                    text$0 = ";" + text$0;
+                    break;
+            }
+
+            return text$0;
+        }
+    },
+
     Module: function(node) {
 
         // NOTE: Strict directive is included with module wrapper
@@ -10967,6 +11010,7 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
 
         return "";
     },
+
 
     ComputedPropertyName: function(node) {
 
