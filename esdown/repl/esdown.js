@@ -1621,12 +1621,16 @@ var ObserverSink = _esdown.class(function(__) { var ObserverSink;
         if (done)
             this._done = true;
 
-        if (this._stop) {
+        var stop = this._stop;
 
-            // Call the termination function and drop the reference to it.
-            // We must not call the termination function more than once.
-            this._stop.call(undefined);
+        if (stop) {
+
+            // Drop the reference to the termination function so that we don't
+            // call it more than once.
             this._stop = null;
+
+            // Call the termination function
+            stop();
         }
     },
 
@@ -10353,12 +10357,16 @@ Runtime.Observable =
         if (done)\n\
             this._done = true;\n\
 \n\
-        if (this._stop) {\n\
+        let stop = this._stop;\n\
 \n\
-            // Call the termination function and drop the reference to it.\n\
-            // We must not call the termination function more than once.\n\
-            this._stop.call(undefined);\n\
+        if (stop) {\n\
+\n\
+            // Drop the reference to the termination function so that we don't\n\
+            // call it more than once.\n\
             this._stop = null;\n\
+\n\
+            // Call the termination function\n\
+            stop();\n\
         }\n\
     }\n\
 \n\
@@ -11334,25 +11342,30 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
     BindExpression: function(node) {
 
         var left = node.left ? node.left.text : null,
-            right = node.right.text;
+            right = node.right.text,
+            temp = this.addTempVar(node),
+            bindee;
 
         if (!left) {
 
             if (node.right.type !== "MemberExpression")
                 throw new Error("Invalid bind expression");
 
-            left = this.addTempVar(node);
-            right = "(" + (left) + " = " + (node.right.object.text) + ")." + (node.right.property.text) + "";
+            bindee = "((" + (temp) + " = " + (node.right.object.text) + ")." + (node.right.property.text) + ")";
+
+        } else {
+
+            bindee = "(" + (temp) + " = " + (left) + ", " + (right) + ")";
         }
 
         if (node.parent.type === "CallExpression" &&
             node.parent.callee === node) {
 
-            node.parent.injectThisArg = left;
-            return "(" + right + ")";
+            node.parent.injectThisArg = temp;
+            return bindee;
         }
 
-        return "(" + (right) + ").bind(" + (left) + ")";
+        return "" + (bindee) + ".bind(" + (temp) + ")";
     },
 
     ArrowFunction: function(node) {
@@ -11413,8 +11426,6 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
 
             node.expression.text = "_esdown." + (method$0) + "(" + (node.expression.text) + ")";
         }
-
-        return "yield " + node.expression.text;
     },
 
     FunctionDeclaration: function(node) {

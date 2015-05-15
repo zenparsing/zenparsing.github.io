@@ -713,7 +713,7 @@ window.onload = function() { "use strict";
 
         window.console.log = function(arg) {
 
-            window.print(arg);
+            addLine(prettyPrint(arg, { stylize: stylize, isOpaque: isOpaque }));
             consoleLog.apply(this, arguments);
         };
     }
