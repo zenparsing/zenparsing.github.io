@@ -5484,6 +5484,14 @@ var Validate = _esdown.class(function(__) { var Validate; __({ constructor: Vali
 
         if (node.type === "Identifier")
             this.addStrictError("Cannot delete unqualified property in strict mode", node);
+    },
+
+    checkUnaryBind: function(node) {
+
+        node = this.unwrapParens(node);
+
+        if (node.type !== "MemberExpression" || node.object.type === "SuperKeyword")
+            this.fail("Unary bind operand must be a property lookup", node);
     }});
 
  });
@@ -6469,6 +6477,9 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
                         this.MemberExpression(false),
                         start,
                         this.nodeEnd());
+
+                    if (!expr.left)
+                        this.checkUnaryBind(expr.right);
 
                     break;
 
@@ -11342,20 +11353,17 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
     BindExpression: function(node) {
 
         var left = node.left ? node.left.text : null,
-            right = node.right.text,
             temp = this.addTempVar(node),
             bindee;
 
         if (!left) {
 
-            if (node.right.type !== "MemberExpression")
-                throw new Error("Invalid bind expression");
-
-            bindee = "((" + (temp) + " = " + (node.right.object.text) + ")." + (node.right.property.text) + ")";
+            var right$0 = this.unwrapParens(node.right);
+            bindee = "((" + (temp) + " = " + (right$0.object.text) + ")." + (right$0.property.text) + ")";
 
         } else {
 
-            bindee = "(" + (temp) + " = " + (left) + ", " + (right) + ")";
+            bindee = "(" + (temp) + " = " + (left) + ", " + (node.right.text) + ")";
         }
 
         if (node.parent.type === "CallExpression" &&
