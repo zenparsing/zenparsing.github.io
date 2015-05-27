@@ -525,9 +525,6 @@ polyfill(Symbol, {
     // Experimental async iterator support
     asyncIterator: Symbol("asyncIterator"),
 
-    // Experimental observable support
-    observable: Symbol("observable"),
-
 });
 
 // === Object ===
@@ -1607,38 +1604,48 @@ InstallFunctions($Promise.prototype, DONT_ENUM, [
 
 (function() {
 
-var ObserverSink = _esdown.class(function(__) { var ObserverSink;
+function cancelSubscription(subscription) {
 
-    __({ constructor: ObserverSink = function(observer) {
+    var cancel = subscription.cancel;
 
-        this._done = false;
-        this._stop = null;
+    if (cancel) {
+
+        // Drop the reference to the termination function so that we don't
+        // call it more than once.
+        subscription.cancel = null;
+
+        // Call the termination function
+        cancel();
+    }
+}
+
+function closeSubscription(subscription) {
+
+    subscription.done = true;
+    cancelSubscription(subscription);
+}
+
+function polyfillSymbol(name) {
+
+    if (!Symbol[name])
+        Object.defineProperty(Symbol, name, { value: Symbol(name) });
+}
+
+polyfillSymbol("observer");
+
+var SubscriptionObserver = _esdown.class(function(__) { var SubscriptionObserver;
+
+    __({ constructor: SubscriptionObserver = function(observer, subscription) {
+
         this._observer = observer;
-    },
-
-    _close: function(done) {
-
-        if (done)
-            this._done = true;
-
-        var stop = this._stop;
-
-        if (stop) {
-
-            // Drop the reference to the termination function so that we don't
-            // call it more than once.
-            this._stop = null;
-
-            // Call the termination function
-            stop();
-        }
+        this._subscription = subscription;
     },
 
     next: function(value) {
 
         // If the stream if closed, then return a "done" result
-        if (this._done)
-            return { done: true };
+        if (this._subscription.done)
+            return { value: undefined, done: true };
 
         var result;
 
@@ -1650,13 +1657,13 @@ var ObserverSink = _esdown.class(function(__) { var ObserverSink;
         } catch (e) {
 
             // If the observer throws, then close the stream and rethrow the error
-            this._close(true);
+            closeSubscription(this._subscription);
             throw e;
         }
 
         // Cleanup if sink is closed
         if (result && result.done)
-            this._close(true);
+            closeSubscription(this._subscription);
 
         return result;
     },
@@ -1664,10 +1671,10 @@ var ObserverSink = _esdown.class(function(__) { var ObserverSink;
     throw: function(value) {
 
         // If the stream is closed, throw the error to the caller
-        if (this._done)
+        if (this._subscription.done)
             throw value;
 
-        this._done = true;
+        this._subscription.done = true;
 
         try {
 
@@ -1679,17 +1686,17 @@ var ObserverSink = _esdown.class(function(__) { var ObserverSink;
 
         } finally {
 
-            this._close();
+            cancelSubscription(this._subscription);
         }
     },
 
     return: function(value) {
 
         // If the stream is closed, then return a done result
-        if (this._done)
-            return { done: true };
+        if (this._subscription.done)
+            return { value: undefined, done: true };
 
-        this._done = true;
+        this._subscription.done = true;
 
         try {
 
@@ -1701,41 +1708,74 @@ var ObserverSink = _esdown.class(function(__) { var ObserverSink;
 
         } finally {
 
-            this._close();
+            cancelSubscription(this._subscription);
         }
     }});
  });
 
+function enqueueMicrotask(fn) {
+
+    // TODO: We don't want to use Promise.prototype.then to schedule a microtask,
+    // because exceptions that occur during execution of "fn" need to be reported as
+    // uncaught exceptions and not unhandled Promise rejections.
+    Promise.resolve().then(fn);
+}
+
 var Observable = _esdown.class(function(__) { var Observable;
 
-    __({ constructor: Observable = function(init) {
+    __({ constructor: Observable = function(executor) {
 
         // The stream initializer must be a function
-        if (typeof init !== "function")
+        if (typeof executor !== "function")
             throw new TypeError("Observable initializer must be a function");
 
-        this._init = init;
+        this._executor = executor;
     },
 
-    subscribe: function(observer) {
+    subscribe: function(observer) { var __this = this; 
 
         // The sink must be an object
         if (Object(observer) !== observer)
             throw new TypeError("Observer must be an object");
 
-        var sink = new ObserverSink(observer),
-            stop;
+        var abort = false,
+            cancel;
+
+        enqueueMicrotask(function(_) {
+
+            if (!abort)
+                cancel = __this[Symbol.observer](observer);
+        });
+
+        return function(_) {
+
+            if (cancel) cancel();
+            else abort = true;
+        };
+    }});
+
+    __(_esdown.computed({}, Symbol.observer, { _: function(observer) {
+
+        // The sink must be an object
+        if (Object(observer) !== observer)
+            throw new TypeError("Observer must be an object");
+
+        var subscription = { cancel: null, done: false },
+            sink = new SubscriptionObserver(observer, subscription),
+            cancel;
 
         try {
 
             // Call the stream initializer
-            stop = this._init.call(undefined, sink);
+            cancel = this._executor.call(undefined, sink);
 
-            // If the return value is null or undefined, then use a default stop function
-            if (stop == null)
-                stop = (function(_) { return sink.return(); });
-            else if (typeof stop !== "function")
-                throw new TypeError(stop + " is not a function");
+            // If the return value is null or undefined, then use a default cancel function
+            if (cancel == null)
+                cancel = (function(_) { return sink.return(); });
+            else if (typeof cancel !== "function")
+                throw new TypeError(cancel + " is not a function");
+
+            subscription.cancel = cancel;
 
         } catch (e) {
 
@@ -1744,31 +1784,32 @@ var Observable = _esdown.class(function(__) { var Observable;
             sink.throw(e);
         }
 
-        sink._stop = stop;
-
         // If the stream is already finished, then perform cleanup
-        if (sink._done)
-            sink._close();
+        if (subscription.done)
+            cancelSubscription(subscription);
 
         // Return a cancellation function.  The default cancellation function
         // will simply call return on the observer.
-        return function(_) { sink._close() };
-    },
+        return function(_) { cancelSubscription(subscription) };
+    } }));
 
-    forEach: function(fn) { var __this = this; 
+    __({ forEach: function(fn, thisArg) { var __this = this; if (thisArg === void 0) thisArg = undefined; 
+
+        if (typeof fn !== "function")
+            throw new TypeError(fn + " is not a function");
 
         return new Promise(function(resolve, reject) {
 
             __this.subscribe({
 
-                next: fn,
+                next: function(value) { return fn.call(thisArg, value); },
                 throw: reject,
                 return: resolve,
             });
         });
     },
 
-    map: function(fn) { var __this = this; 
+    map: function(fn, thisArg) { var __this = this; if (thisArg === void 0) thisArg = undefined; 
 
         if (typeof fn !== "function")
             throw new TypeError(fn + " is not a function");
@@ -1777,7 +1818,7 @@ var Observable = _esdown.class(function(__) { var Observable;
 
             next: function(value) {
 
-                try { value = fn(value) }
+                try { value = fn.call(thisArg, value) }
                 catch (e) { return sink.throw(e) }
 
                 return sink.next(value);
@@ -1788,7 +1829,7 @@ var Observable = _esdown.class(function(__) { var Observable;
         }); });
     },
 
-    filter: function(fn) { var __this = this; 
+    filter: function(fn, thisArg) { var __this = this; if (thisArg === void 0) thisArg = undefined; 
 
         if (typeof fn !== "function")
             throw new TypeError(fn + " is not a function");
@@ -1797,7 +1838,7 @@ var Observable = _esdown.class(function(__) { var Observable;
 
             next: function(value) {
 
-                try { if (!fn(value)) return { done: false } }
+                try { if (!fn.call(thisArg, value)) return { done: false } }
                 catch (e) { return sink.throw(e) }
 
                 return sink.next(value);
@@ -1807,8 +1848,6 @@ var Observable = _esdown.class(function(__) { var Observable;
             return: function(value) { return sink.return(value) },
         }); });
     }});
-
-    __(_esdown.computed({}, Symbol.observable, { _: function() { return this } }));
 
     __.static(_esdown.computed({}, Symbol.species, { get _() { return this } }));
 
@@ -9278,9 +9317,6 @@ polyfill(Symbol, {\n\
     // Experimental async iterator support\n\
     asyncIterator: Symbol(\"asyncIterator\"),\n\
 \n\
-    // Experimental observable support\n\
-    observable: Symbol(\"observable\"),\n\
-\n\
 });\n\
 \n\
 // === Object ===\n\
@@ -10354,38 +10390,48 @@ InstallFunctions($Promise.prototype, DONT_ENUM, [\n\
 
 Runtime.Observable = 
 
-"class ObserverSink {\n\
+"function cancelSubscription(subscription) {\n\
 \n\
-    constructor(observer) {\n\
+    let cancel = subscription.cancel;\n\
 \n\
-        this._done = false;\n\
-        this._stop = null;\n\
-        this._observer = observer;\n\
+    if (cancel) {\n\
+\n\
+        // Drop the reference to the termination function so that we don't\n\
+        // call it more than once.\n\
+        subscription.cancel = null;\n\
+\n\
+        // Call the termination function\n\
+        cancel();\n\
     }\n\
+}\n\
 \n\
-    _close(done) {\n\
+function closeSubscription(subscription) {\n\
 \n\
-        if (done)\n\
-            this._done = true;\n\
+    subscription.done = true;\n\
+    cancelSubscription(subscription);\n\
+}\n\
 \n\
-        let stop = this._stop;\n\
+function polyfillSymbol(name) {\n\
 \n\
-        if (stop) {\n\
+    if (!Symbol[name])\n\
+        Object.defineProperty(Symbol, name, { value: Symbol(name) });\n\
+}\n\
 \n\
-            // Drop the reference to the termination function so that we don't\n\
-            // call it more than once.\n\
-            this._stop = null;\n\
+polyfillSymbol(\"observer\");\n\
 \n\
-            // Call the termination function\n\
-            stop();\n\
-        }\n\
+class SubscriptionObserver {\n\
+\n\
+    constructor(observer, subscription) {\n\
+\n\
+        this._observer = observer;\n\
+        this._subscription = subscription;\n\
     }\n\
 \n\
     next(value) {\n\
 \n\
         // If the stream if closed, then return a \"done\" result\n\
-        if (this._done)\n\
-            return { done: true };\n\
+        if (this._subscription.done)\n\
+            return { value: undefined, done: true };\n\
 \n\
         let result;\n\
 \n\
@@ -10397,13 +10443,13 @@ Runtime.Observable =
         } catch (e) {\n\
 \n\
             // If the observer throws, then close the stream and rethrow the error\n\
-            this._close(true);\n\
+            closeSubscription(this._subscription);\n\
             throw e;\n\
         }\n\
 \n\
         // Cleanup if sink is closed\n\
         if (result && result.done)\n\
-            this._close(true);\n\
+            closeSubscription(this._subscription);\n\
 \n\
         return result;\n\
     }\n\
@@ -10411,10 +10457,10 @@ Runtime.Observable =
     throw(value) {\n\
 \n\
         // If the stream is closed, throw the error to the caller\n\
-        if (this._done)\n\
+        if (this._subscription.done)\n\
             throw value;\n\
 \n\
-        this._done = true;\n\
+        this._subscription.done = true;\n\
 \n\
         try {\n\
 \n\
@@ -10426,17 +10472,17 @@ Runtime.Observable =
 \n\
         } finally {\n\
 \n\
-            this._close();\n\
+            cancelSubscription(this._subscription);\n\
         }\n\
     }\n\
 \n\
     return(value) {\n\
 \n\
         // If the stream is closed, then return a done result\n\
-        if (this._done)\n\
-            return { done: true };\n\
+        if (this._subscription.done)\n\
+            return { value: undefined, done: true };\n\
 \n\
-        this._done = true;\n\
+        this._subscription.done = true;\n\
 \n\
         try {\n\
 \n\
@@ -10448,20 +10494,28 @@ Runtime.Observable =
 \n\
         } finally {\n\
 \n\
-            this._close();\n\
+            cancelSubscription(this._subscription);\n\
         }\n\
     }\n\
 }\n\
 \n\
+function enqueueMicrotask(fn) {\n\
+\n\
+    // TODO: We don't want to use Promise.prototype.then to schedule a microtask,\n\
+    // because exceptions that occur during execution of \"fn\" need to be reported as\n\
+    // uncaught exceptions and not unhandled Promise rejections.\n\
+    Promise.resolve().then(fn);\n\
+}\n\
+\n\
 class Observable {\n\
 \n\
-    constructor(init) {\n\
+    constructor(executor) {\n\
 \n\
         // The stream initializer must be a function\n\
-        if (typeof init !== \"function\")\n\
+        if (typeof executor !== \"function\")\n\
             throw new TypeError(\"Observable initializer must be a function\");\n\
 \n\
-        this._init = init;\n\
+        this._executor = executor;\n\
     }\n\
 \n\
     subscribe(observer) {\n\
@@ -10470,19 +10524,44 @@ class Observable {\n\
         if (Object(observer) !== observer)\n\
             throw new TypeError(\"Observer must be an object\");\n\
 \n\
-        let sink = new ObserverSink(observer),\n\
-            stop;\n\
+        let abort = false,\n\
+            cancel;\n\
+\n\
+        enqueueMicrotask(_=> {\n\
+\n\
+            if (!abort)\n\
+                cancel = this[Symbol.observer](observer);\n\
+        });\n\
+\n\
+        return _=> {\n\
+\n\
+            if (cancel) cancel();\n\
+            else abort = true;\n\
+        };\n\
+    }\n\
+\n\
+    [Symbol.observer](observer) {\n\
+\n\
+        // The sink must be an object\n\
+        if (Object(observer) !== observer)\n\
+            throw new TypeError(\"Observer must be an object\");\n\
+\n\
+        let subscription = { cancel: null, done: false },\n\
+            sink = new SubscriptionObserver(observer, subscription),\n\
+            cancel;\n\
 \n\
         try {\n\
 \n\
             // Call the stream initializer\n\
-            stop = this._init.call(undefined, sink);\n\
+            cancel = this._executor.call(undefined, sink);\n\
 \n\
-            // If the return value is null or undefined, then use a default stop function\n\
-            if (stop == null)\n\
-                stop = (_=> sink.return());\n\
-            else if (typeof stop !== \"function\")\n\
-                throw new TypeError(stop + \" is not a function\");\n\
+            // If the return value is null or undefined, then use a default cancel function\n\
+            if (cancel == null)\n\
+                cancel = (_=> sink.return());\n\
+            else if (typeof cancel !== \"function\")\n\
+                throw new TypeError(cancel + \" is not a function\");\n\
+\n\
+            subscription.cancel = cancel;\n\
 \n\
         } catch (e) {\n\
 \n\
@@ -10491,31 +10570,32 @@ class Observable {\n\
             sink.throw(e);\n\
         }\n\
 \n\
-        sink._stop = stop;\n\
-\n\
         // If the stream is already finished, then perform cleanup\n\
-        if (sink._done)\n\
-            sink._close();\n\
+        if (subscription.done)\n\
+            cancelSubscription(subscription);\n\
 \n\
         // Return a cancellation function.  The default cancellation function\n\
         // will simply call return on the observer.\n\
-        return _=> { sink._close() };\n\
+        return _=> { cancelSubscription(subscription) };\n\
     }\n\
 \n\
-    forEach(fn) {\n\
+    forEach(fn, thisArg = undefined) {\n\
+\n\
+        if (typeof fn !== \"function\")\n\
+            throw new TypeError(fn + \" is not a function\");\n\
 \n\
         return new Promise((resolve, reject) => {\n\
 \n\
             this.subscribe({\n\
 \n\
-                next: fn,\n\
+                next: value => fn.call(thisArg, value),\n\
                 throw: reject,\n\
                 return: resolve,\n\
             });\n\
         });\n\
     }\n\
 \n\
-    map(fn) {\n\
+    map(fn, thisArg = undefined) {\n\
 \n\
         if (typeof fn !== \"function\")\n\
             throw new TypeError(fn + \" is not a function\");\n\
@@ -10524,7 +10604,7 @@ class Observable {\n\
 \n\
             next(value) {\n\
 \n\
-                try { value = fn(value) }\n\
+                try { value = fn.call(thisArg, value) }\n\
                 catch (e) { return sink.throw(e) }\n\
 \n\
                 return sink.next(value);\n\
@@ -10535,7 +10615,7 @@ class Observable {\n\
         }));\n\
     }\n\
 \n\
-    filter(fn) {\n\
+    filter(fn, thisArg = undefined) {\n\
 \n\
         if (typeof fn !== \"function\")\n\
             throw new TypeError(fn + \" is not a function\");\n\
@@ -10544,7 +10624,7 @@ class Observable {\n\
 \n\
             next(value) {\n\
 \n\
-                try { if (!fn(value)) return { done: false } }\n\
+                try { if (!fn.call(thisArg, value)) return { done: false } }\n\
                 catch (e) { return sink.throw(e) }\n\
 \n\
                 return sink.next(value);\n\
@@ -10554,8 +10634,6 @@ class Observable {\n\
             return(value) { return sink.return(value) },\n\
         }));\n\
     }\n\
-\n\
-    [Symbol.observable]() { return this }\n\
 \n\
     static get [Symbol.species]() { return this }\n\
 \n\
