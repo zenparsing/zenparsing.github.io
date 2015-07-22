@@ -1,7 +1,7 @@
 /*=esdown=*/(function(fn, deps, name) { function obj() { return {} } if (typeof exports !== 'undefined') fn(require, exports, module); else if (typeof define === 'function' && define.amd) define(['require', 'exports', 'module'].concat(deps), fn); else if (typeof window !== 'undefined' && name) fn(obj, window[name] = {}, {}); else fn(obj, {}, {}); })(function(require, exports, module) { 'use strict'; function __load(p, l) { module.__es6 = !l; var e = require(p); if (e && e.constructor !== Object) e.default = e; return e; } 
 (function() {
 
-var VERSION = "0.9.9";
+var VERSION = "0.9.10";
 
 var Global = (function() {
 
@@ -2984,6 +2984,14 @@ function PrivateDeclaration(isStatic, name, initializer, start, end) {
     this.initializer = initializer;
 }
 
+function ClassStaticBlock(statements, start, end) {
+
+    this.type = "ClassStaticBlock";
+    this.start = start;
+    this.end = end;
+    this.statements = statements;
+}
+
 function ImportDeclaration(imports, from, start, end) {
 
     this.type = "ImportDeclaration";
@@ -3153,6 +3161,7 @@ exports.ClassExpression = ClassExpression;
 exports.ClassBody = ClassBody;
 exports.EmptyClassElement = EmptyClassElement;
 exports.PrivateDeclaration = PrivateDeclaration;
+exports.ClassStaticBlock = ClassStaticBlock;
 exports.ImportDeclaration = ImportDeclaration;
 exports.NamespaceImport = NamespaceImport;
 exports.NamedImports = NamedImports;
@@ -8016,6 +8025,7 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
 
         var start = this.nodeStart(),
             hasConstructor = false,
+            hasBlock = false,
             atNames = new AtNameSet(this),
             list = [];
 
@@ -8044,6 +8054,14 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
 
                 case "PrivateDeclaration":
                     atNames.add(elem$0.name, "");
+                    break;
+
+                case "ClassStaticBlock":
+
+                    if (hasBlock)
+                        this.fail("Duplicate static initialization block", elem$0);
+
+                    hasBlock = true;
                     break;
             }
 
@@ -8091,11 +8109,21 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
             return this.EmptyClassElement();
 
         if (token.type === "IDENTIFIER" &&
-            token.value === "static" &&
-            this.peekAt("name", 1) !== "(") {
+            token.value === "static") {
 
-            this.read();
-            isStatic = true;
+            switch (this.peekAt("name", 1)) {
+
+                case "(":
+                    break;
+
+                case "{":
+                    return this.ClassStaticBlock();
+                    break;
+
+                default:
+                    this.read();
+                    isStatic = true;
+            }
         }
 
         if (this.peek("name") === "ATNAME" && this.peekAt("name", 1) !== "(")
@@ -8126,6 +8154,19 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
         method.static = isStatic;
 
         return method;
+    },
+
+    ClassStaticBlock: function() {
+
+        var start = this.nodeStart();
+
+        this.read("IDENTIFIER");
+
+        this.read("{");
+        var list = this.StatementList(false, false);
+        this.read("}");
+
+        return new AST.ClassStaticBlock(list, start, this.nodeEnd());
     },
 
     // === Modules ===
@@ -8871,7 +8912,7 @@ var Runtime = {};
 
 Runtime.API = 
 
-"const VERSION = \"0.9.9\";\n\
+"const VERSION = \"0.9.10\";\n\
 \n\
 let Global = (function() {\n\
 \n\
@@ -11879,6 +11920,11 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
             text = text.slice(1, -1) + " " + footer.join(" ") + " }";
 
         return text;
+    },
+
+    ClassStaticBlock: function(node) {
+
+        return "(function() " + this.stringify(node).replace(/^static\s/, "") + ")()";
     },
 
     TaggedTemplateExpression: function(node) {
