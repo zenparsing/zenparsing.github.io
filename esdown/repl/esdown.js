@@ -125,35 +125,6 @@ Global._esdown = {
 
     class: buildClass,
 
-    // Support for iterator protocol
-    iter: function(obj) {
-
-        if (obj[Symbol.iterator] !== void 0)
-            return obj[Symbol.iterator]();
-
-        if (Array.isArray(obj))
-            return obj.values();
-
-        return obj;
-    },
-
-    asyncIter: function(obj) {
-
-        if (obj[Symbol.asyncIterator] !== void 0)
-            return obj[Symbol.asyncIterator]();
-
-        var iter = _esdown.computed({ }, Symbol.asyncIterator, { _: function() { return this } }),
-            inner = _esdown.iter(obj);
-
-        ["next", "throw", "return"].forEach(function(name) {
-
-            if (name in inner)
-                iter[name] = function(value) { return Promise.resolve(inner[name](value)); };
-        });
-
-        return iter;
-    },
-
     // Support for computed property names
     computed: function(target) {
 
@@ -226,64 +197,93 @@ Global._esdown = {
 
                 if (back) {
 
+                    // If list is not empty, then push onto the end
                     back = back.next = x;
 
                 } else {
 
+                    // Create new list and resume generator
                     front = back = x;
                     resume(type, value);
                 }
             });
         }
 
-        function resume(type, value) {
+        function fulfill(type, value) {
 
-            if (type === "return" && !(type in iter)) {
+            switch (type) {
 
-                // HACK: If the generator does not support the "return" method, then
-                // emulate it (poorly) using throw.  (V8 circa 2015-02-13 does not support
-                // generator.return.)
-                type = "throw";
-                value = { value: value, __return: true };
-            }
+                case "return":
+                    front.resolve({ value: value, done: true });
+                    break;
 
-            try {
+                case "throw":
+                    front.reject(value);
+                    break;
 
-                var result$1 = iter[type](value);
-
-                value = result$1.value;
-
-                if (typeof value === "object" && "_esdown_await" in value) {
-
-                    if (result$1.done)
-                        throw new Error("Invalid async generator return");
-
-                    Promise.resolve(value._esdown_await).then(
-                        function(x) { return resume("next", x); },
-                        function(x) { return resume("throw", x); });
-
-                    return;
-                }
-
-                front.resolve(result$1);
-
-            } catch (x) {
-
-                if (x && x.__return === true) {
-
-                    // HACK: Return-as-throw
-                    front.resolve({ value: x.value, done: true });
-
-                } else {
-
-                    front.reject(x);
-                }
+                default:
+                    front.resolve({ value: value, done: false });
+                    break;
             }
 
             front = front.next;
 
             if (front) resume(front.type, front.value);
             else back = null;
+        }
+
+        function awaitValue(result) {
+
+            var value = result.value;
+
+            if (typeof value === "object" && "_esdown_await" in value) {
+
+                if (result.done)
+                    throw new Error("Invalid async generator return");
+
+                return value._esdown_await;
+            }
+
+            return null;
+        }
+
+        function resume(type, value) {
+
+            // HACK: If the generator does not support the "return" method, then
+            // emulate it (poorly) using throw.  (V8 circa 2015-02-13 does not support
+            // generator.return.)
+            if (type === "return" && !(type in iter)) {
+
+                type = "throw";
+                value = { value: value, __return: true };
+            }
+
+            try {
+
+                var result$1 = iter[type](value),
+                    awaited$0 = awaitValue(result$1);
+
+                if (awaited$0) {
+
+                    Promise.resolve(awaited$0).then(
+                        function(x) { return resume("next", x); },
+                        function(x) { return resume("throw", x); });
+
+                } else {
+
+                    Promise.resolve(result$1.value).then(
+                        function(x) { return fulfill(result$1.done ? "return" : "normal", x); },
+                        function(x) { return fulfill("throw", x); });
+                }
+
+            } catch (x) {
+
+                // HACK: Return-as-throw
+                if (x && x.__return === true)
+                    return fulfill("return", x.value);
+
+                fulfill("throw", x);
+            }
         }
     },
 
@@ -312,7 +312,7 @@ Global._esdown = {
 
                 } else {
 
-                    for (var __$0 = _esdown.iter(list), __$1; __$1 = __$0.next(), !__$1.done;)
+                    for (var __$0 = (list)[Symbol.iterator](), __$1; __$1 = __$0.next(), !__$1.done;)
                         { var item$0 = __$1.value; this.a.push(item$0); }
                 }
 
@@ -340,7 +340,7 @@ Global._esdown = {
             };
         }
 
-        var iter = _esdown.iter(toObject(obj));
+        var iter = toObject(obj)[Symbol.iterator]();
 
         return {
 
@@ -480,21 +480,6 @@ function toObject(val) {
         throw new TypeError(val + " is not an object");
 
     return Object(val);
-}
-
-function iteratorMethod(obj) {
-
-    // TODO:  What about typeof === "string"?
-    if (!obj || typeof obj !== "object")
-        return null;
-
-    var m = obj[Symbol.iterator];
-
-    // Generator iterators in Node 0.11.13 do not have a [Symbol.iterator] method
-    if (!m && typeof obj.next === "function" && typeof obj.throw === "function")
-        return function() { return this };
-
-    return m;
 }
 
 function assertThis(val, name) {
@@ -848,7 +833,7 @@ polyfill(Array, {
         if (map !== void 0 && typeof map !== "function")
             throw new TypeError(map + " is not a function");
 
-        var getIter = iteratorMethod(list);
+        var getIter = list[Symbol.iterator];
 
         if (getIter) {
 
@@ -1877,7 +1862,7 @@ var Observable = _esdown.class(function(__) { var Observable;
                 // will receive an error.
                 try {
 
-                    for (var __$0 = _esdown.iter(x), __$1; __$1 = __$0.next(), !__$1.done;) { var item$1 = __$1.value; 
+                    for (var __$0 = (x)[Symbol.iterator](), __$1; __$1 = __$0.next(), !__$1.done;) { var item$1 = __$1.value; 
 
                         observer.next(item$1);
 
@@ -5772,18 +5757,6 @@ function isUnary(op) {
     return false;
 }
 
-// Returns true if the value is a function modifier keyword
-function isFunctionModifier(value) {
-
-    return value === "async";
-}
-
-// Returns true if the value is a generator function modifier keyword
-function isGeneratorModifier(value) {
-
-    return value === "async" || value === "";
-}
-
 // Returns true if the value is a method definition keyword
 function isMethodKeyword(value) {
 
@@ -6109,15 +6082,21 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
         return false;
     },
 
-    peekFunctionModifier: function() {
+    peekAsync: function() {
 
         var token = this.peekToken();
 
-        if (!isFunctionModifier(keywordFromToken(token)))
-            return false;
+        if (keywordFromToken(token) !== "async")
+            return "";
 
         token = this.peekTokenAt("div", 1);
-        return token.type === "function" && !token.newlineBefore;
+
+        if (token.newlineBefore)
+            return "";
+
+        var type = token.type;
+
+        return type === "function" ? type : "";
     },
 
     peekEnd: function() {
@@ -6597,9 +6576,9 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
                         break;
                     }
 
-                    if (isFunctionModifier(keywordFromNode(expr)) && !token.newlineBefore) {
+                    if (keywordFromNode(expr) === "async" && !token.newlineBefore) {
 
-                        arrowType = expr.value;
+                        arrowType = "async";
                         this.pushMaybeContext();
                     }
 
@@ -6774,7 +6753,7 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
 
                         return this.FunctionExpression();
 
-                    } else if (next.type === "IDENTIFIER" && isFunctionModifier(value)) {
+                    } else if (next.type === "IDENTIFIER" && value === "async") {
 
                         this.read();
                         this.pushContext(true);
@@ -7470,7 +7449,7 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
 
         this.read("for");
 
-        if (this.context.isAsync && this.peekKeyword("async")) {
+        if (this.peekAwait()) {
 
             this.read();
             async = true;
@@ -7759,7 +7738,7 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
                 if (this.peekLet())
                     return this.LexicalDeclaration();
 
-                if (this.peekFunctionModifier())
+                if (this.peekAsync() === "function")
                     return this.FunctionDeclaration();
 
                 break;
@@ -7788,15 +7767,15 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
 
         token = this.peekToken();
 
-        if (isFunctionModifier(keywordFromToken(token))) {
+        if (keywordFromToken(token) === "async") {
 
             this.read();
-            kind = token.value;
+            kind = "async";
         }
 
         this.read("function");
 
-        if (isGeneratorModifier(kind) && this.peek() === "*") {
+        if (this.peek() === "*") {
 
             this.read();
             kind = kind ? kind + "-generator" : "generator";
@@ -7830,15 +7809,15 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
 
         token = this.peekToken();
 
-        if (isFunctionModifier(keywordFromToken(token))) {
+        if (keywordFromToken(token) === "async") {
 
             this.read();
-            kind = token.value;
+            kind = "async";
         }
 
         this.read("function");
 
-        if (isGeneratorModifier(kind) && this.peek() === "*") {
+        if (this.peek() === "*") {
 
             this.read();
             kind = kind ? kind + "-generator" : "generator";
@@ -7885,11 +7864,11 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
 
             if (this.peek("name") !== "(") {
 
-                if (val$0 === "get" || val$0 === "set" || isFunctionModifier(val$0)) {
+                if (val$0 === "get" || val$0 === "set" || val$0 === "async") {
 
                     kind = name.value;
 
-                    if (isGeneratorModifier(kind) && this.peek("name") === "*") {
+                    if (kind === "async" && this.peek("name") === "*") {
 
                         this.read();
                         kind += "-generator";
@@ -8402,7 +8381,7 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
 
                 if (this.peekLet())
                     decl = this.LexicalDeclaration();
-                else if (this.peekFunctionModifier())
+                else if (this.peekAsync() === "function")
                     decl = this.FunctionDeclaration();
                 else
                     return this.ExportDefaultFrom(start);
@@ -8434,7 +8413,7 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
 
             case "IDENTIFIER":
 
-                if (this.peekFunctionModifier()) {
+                if (this.peekAsync() === "function") {
 
                     binding = this.FunctionExpression();
                     break;
@@ -9101,35 +9080,6 @@ Global._esdown = {\n\
 \n\
     class: buildClass,\n\
 \n\
-    // Support for iterator protocol\n\
-    iter(obj) {\n\
-\n\
-        if (obj[Symbol.iterator] !== void 0)\n\
-            return obj[Symbol.iterator]();\n\
-\n\
-        if (Array.isArray(obj))\n\
-            return obj.values();\n\
-\n\
-        return obj;\n\
-    },\n\
-\n\
-    asyncIter(obj) {\n\
-\n\
-        if (obj[Symbol.asyncIterator] !== void 0)\n\
-            return obj[Symbol.asyncIterator]();\n\
-\n\
-        let iter = { [Symbol.asyncIterator]() { return this } },\n\
-            inner = _esdown.iter(obj);\n\
-\n\
-        [\"next\", \"throw\", \"return\"].forEach(name => {\n\
-\n\
-            if (name in inner)\n\
-                iter[name] = value => Promise.resolve(inner[name](value));\n\
-        });\n\
-\n\
-        return iter;\n\
-    },\n\
-\n\
     // Support for computed property names\n\
     computed(target) {\n\
 \n\
@@ -9202,64 +9152,93 @@ Global._esdown = {\n\
 \n\
                 if (back) {\n\
 \n\
+                    // If list is not empty, then push onto the end\n\
                     back = back.next = x;\n\
 \n\
                 } else {\n\
 \n\
+                    // Create new list and resume generator\n\
                     front = back = x;\n\
                     resume(type, value);\n\
                 }\n\
             });\n\
         }\n\
 \n\
-        function resume(type, value) {\n\
+        function fulfill(type, value) {\n\
 \n\
-            if (type === \"return\" && !(type in iter)) {\n\
+            switch (type) {\n\
 \n\
-                // HACK: If the generator does not support the \"return\" method, then\n\
-                // emulate it (poorly) using throw.  (V8 circa 2015-02-13 does not support\n\
-                // generator.return.)\n\
-                type = \"throw\";\n\
-                value = { value, __return: true };\n\
-            }\n\
+                case \"return\":\n\
+                    front.resolve({ value, done: true });\n\
+                    break;\n\
 \n\
-            try {\n\
+                case \"throw\":\n\
+                    front.reject(value);\n\
+                    break;\n\
 \n\
-                let result = iter[type](value);\n\
-\n\
-                value = result.value;\n\
-\n\
-                if (typeof value === \"object\" && \"_esdown_await\" in value) {\n\
-\n\
-                    if (result.done)\n\
-                        throw new Error(\"Invalid async generator return\");\n\
-\n\
-                    Promise.resolve(value._esdown_await).then(\n\
-                        x => resume(\"next\", x),\n\
-                        x => resume(\"throw\", x));\n\
-\n\
-                    return;\n\
-                }\n\
-\n\
-                front.resolve(result);\n\
-\n\
-            } catch (x) {\n\
-\n\
-                if (x && x.__return === true) {\n\
-\n\
-                    // HACK: Return-as-throw\n\
-                    front.resolve({ value: x.value, done: true });\n\
-\n\
-                } else {\n\
-\n\
-                    front.reject(x);\n\
-                }\n\
+                default:\n\
+                    front.resolve({ value, done: false });\n\
+                    break;\n\
             }\n\
 \n\
             front = front.next;\n\
 \n\
             if (front) resume(front.type, front.value);\n\
             else back = null;\n\
+        }\n\
+\n\
+        function awaitValue(result) {\n\
+\n\
+            let value = result.value;\n\
+\n\
+            if (typeof value === \"object\" && \"_esdown_await\" in value) {\n\
+\n\
+                if (result.done)\n\
+                    throw new Error(\"Invalid async generator return\");\n\
+\n\
+                return value._esdown_await;\n\
+            }\n\
+\n\
+            return null;\n\
+        }\n\
+\n\
+        function resume(type, value) {\n\
+\n\
+            // HACK: If the generator does not support the \"return\" method, then\n\
+            // emulate it (poorly) using throw.  (V8 circa 2015-02-13 does not support\n\
+            // generator.return.)\n\
+            if (type === \"return\" && !(type in iter)) {\n\
+\n\
+                type = \"throw\";\n\
+                value = { value, __return: true };\n\
+            }\n\
+\n\
+            try {\n\
+\n\
+                let result = iter[type](value),\n\
+                    awaited = awaitValue(result);\n\
+\n\
+                if (awaited) {\n\
+\n\
+                    Promise.resolve(awaited).then(\n\
+                        x => resume(\"next\", x),\n\
+                        x => resume(\"throw\", x));\n\
+\n\
+                } else {\n\
+\n\
+                    Promise.resolve(result.value).then(\n\
+                        x => fulfill(result.done ? \"return\" : \"normal\", x),\n\
+                        x => fulfill(\"throw\", x));\n\
+                }\n\
+\n\
+            } catch (x) {\n\
+\n\
+                // HACK: Return-as-throw\n\
+                if (x && x.__return === true)\n\
+                    return fulfill(\"return\", x.value);\n\
+\n\
+                fulfill(\"throw\", x);\n\
+            }\n\
         }\n\
     },\n\
 \n\
@@ -9316,7 +9295,7 @@ Global._esdown = {\n\
             };\n\
         }\n\
 \n\
-        let iter = _esdown.iter(toObject(obj));\n\
+        let iter = toObject(obj)[Symbol.iterator]();\n\
 \n\
         return {\n\
 \n\
@@ -9454,21 +9433,6 @@ function toObject(val) {\n\
         throw new TypeError(val + \" is not an object\");\n\
 \n\
     return Object(val);\n\
-}\n\
-\n\
-function iteratorMethod(obj) {\n\
-\n\
-    // TODO:  What about typeof === \"string\"?\n\
-    if (!obj || typeof obj !== \"object\")\n\
-        return null;\n\
-\n\
-    let m = obj[Symbol.iterator];\n\
-\n\
-    // Generator iterators in Node 0.11.13 do not have a [Symbol.iterator] method\n\
-    if (!m && typeof obj.next === \"function\" && typeof obj.throw === \"function\")\n\
-        return function() { return this };\n\
-\n\
-    return m;\n\
 }\n\
 \n\
 function assertThis(val, name) {\n\
@@ -9822,7 +9786,7 @@ polyfill(Array, {\n\
         if (map !== void 0 && typeof map !== \"function\")\n\
             throw new TypeError(map + \" is not a function\");\n\
 \n\
-        var getIter = iteratorMethod(list);\n\
+        var getIter = list[Symbol.iterator];\n\
 \n\
         if (getIter) {\n\
 \n\
@@ -11301,12 +11265,12 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
 
         if (node.async) {
 
-            head = "for (var " + (iter) + " = _esdown.asyncIter(" + (node.right.text) + "), " + (iterResult) + "; ";
+            head = "for (var " + (iter) + " = (" + (node.right.text) + ")[Symbol.asyncIterator](), " + (iterResult) + "; ";
             head += "" + (iterResult) + " = " + (this.awaitYield(context, iter + ".next()")) + ", ";
 
         } else {
 
-            head = "for (var " + (iter) + " = _esdown.iter(" + (node.right.text) + "), " + (iterResult) + "; ";
+            head = "for (var " + (iter) + " = (" + (node.right.text) + ")[Symbol.iterator](), " + (iterResult) + "; ";
             head += "" + (iterResult) + " = " + (iter) + ".next(), ";
         }
 
