@@ -11798,9 +11798,9 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
         if (node.delegate) {
 
             var fn$0 = this.parentFunction(node),
-                method$0 = isAsyncType(fn$0.kind) ? "asyncIter" : "iter";
+                symbol$0 = isAsyncType(fn$0.kind) ? "asyncIterator" : "iterator";
 
-            node.expression.text = "_esdown." + (method$0) + "(" + (node.expression.text) + ")";
+            node.expression.text = "(" + (node.expression.text) + ")[Symbol." + (symbol$0) + "]()";
         }
     },
 

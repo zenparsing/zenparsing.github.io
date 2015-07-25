@@ -573,6 +573,12 @@ window.onload = function() { "use strict";
                 evt.preventDefault();
                 return;
             }
+
+            if (evt.shiftKey) {
+
+                setInputValue(input.value + "\n" + autoIndent(input.value));
+                evt.preventDefault();
+            }
         }
 
         resizeInput();
@@ -705,18 +711,19 @@ window.onload = function() { "use strict";
     input.focus();
 
     window.contentElement = elem("#content");
-    window.print = function(str) { addLine(str + "") };
 
-    if (window.console) {
+    if (!window.console)
+        window.console = {};
 
-        var consoleLog = window.console.log;
+    var consoleLog = window.console.log;
 
-        window.console.log = function(arg) {
+    window.console.log = function(arg) {
 
-            addLine(prettyPrint(arg, { stylize: stylize, isOpaque: isOpaque }));
+        addLine(prettyPrint(arg, { stylize: stylize, isOpaque: isOpaque }));
+
+        if (consoleLog)
             consoleLog.apply(this, arguments);
-        };
-    }
+    };
 
     window.onerror = function(error) {
 
@@ -764,10 +771,6 @@ window.onload = function() { "use strict";
         <td>The <strong>div</strong> element which contains the content you're reading.
             You can use this element to modify the DOM.
         </td>
-    </tr>
-    <tr>
-        <td><code>print(text)</code></td>
-        <td>Prints a string to the REPL output.</td>
     </tr>
     </table>
 
