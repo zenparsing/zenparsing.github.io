@@ -2575,13 +2575,23 @@ function MetaProperty(left, right, start, end) {
     this.right = right;
 }
 
-function BindExpression(left, right, start, end) {
+function PipeExpression(left, right, args, start, end) {
 
-    this.type = "BindExpression";
+    this.type = "PipeExpression";
     this.start = start;
     this.end = end;
     this.left = left;
     this.right = right;
+    this.arguments = args;
+}
+
+function BindExpression(obj, prop, start, end) {
+
+    this.type = "BindExpression";
+    this.start = start;
+    this.end = end;
+    this.object = obj;
+    this.property = prop;
 }
 
 function CallExpression(callee, args, start, end) {
@@ -3160,6 +3170,7 @@ exports.UpdateExpression = UpdateExpression;
 exports.UnaryExpression = UnaryExpression;
 exports.MemberExpression = MemberExpression;
 exports.MetaProperty = MetaProperty;
+exports.PipeExpression = PipeExpression;
 exports.BindExpression = BindExpression;
 exports.CallExpression = CallExpression;
 exports.TaggedTemplateExpression = TaggedTemplateExpression;
@@ -4241,9 +4252,9 @@ var multiCharPunctuator = new RegExp("^(?:" +
     "<<=?|" +
     ">>>?=?|" +
     "[!=]==|" +
-    "=>|" +
-    "[\.]{2,3}|" +
+    "[=-]>|" +
     "::|" +
+    "[\.]{2,3}|" +
     "[-+&|<>!=*&\^%\/]=" +
 ")$");
 
@@ -5650,14 +5661,6 @@ var Validate = _esdown.class(function(__) { var Validate; __({ constructor: Vali
 
         if (node.type === "Identifier")
             this.addStrictError("Cannot delete unqualified property in strict mode", node);
-    },
-
-    checkUnaryBind: function(node) {
-
-        node = this.unwrapParens(node);
-
-        if (node.type !== "MemberExpression" || node.object.type === "SuperKeyword")
-            this.fail("Unary bind operand must be a property lookup", node);
     }});
 
  });
@@ -6510,14 +6513,6 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
 
                 break;
 
-            case "::":
-
-                if (allowCall) {
-
-                    expr = null;
-                    break;
-                }
-
             default:
 
                 expr = this.PrimaryExpression();
@@ -6621,6 +6616,18 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
 
                 case "::":
 
+                    this.read();
+
+                    expr = new AST.BindExpression(
+                        expr,
+                        this.IdentifierName(),
+                        start,
+                        this.nodeEnd());
+
+                    break;
+
+                case "->":
+
                     if (isSuper)
                         this.fail();
 
@@ -6632,14 +6639,12 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
 
                     this.read();
 
-                    expr = new AST.BindExpression(
+                    expr = new AST.PipeExpression(
                         expr,
-                        this.MemberExpression(false),
+                        this.Identifier(true),
+                        this.ArgumentList(),
                         start,
                         this.nodeEnd());
-
-                    if (!expr.left)
-                        this.checkUnaryBind(expr.right);
 
                     break;
 
@@ -11645,7 +11650,7 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
 
             argText = "void 0";
 
-            if (node.callee.type === "MemberExpression") {
+            if (callee.type === "MemberExpression") {
 
                 argText = this.addTempVar(node);
 
@@ -11718,30 +11723,32 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
             return this.privateReference(node, node.object.text, node.property.text);
     },
 
+    PipeExpression: function(node) {
+
+        var left = node.left.text,
+            temp = this.addTempVar(node),
+            callee = "(" + (temp) + " = " + (left) + ", " + (node.right.text) + ")",
+            args = temp;
+
+        if (node.hasSpread) {
+
+            args = this.spreadList(node.arguments, "[" + args + "]");
+            return "" + (callee) + ".apply(void 0, " + (args) + ")";
+        }
+
+        if (node.arguments.length > 0)
+            args += ", " + this.joinList(node.arguments);
+
+        return "" + (callee) + "(" + (args) + ")";
+    },
+
     BindExpression: function(node) {
 
-        var left = node.left ? node.left.text : null,
-            temp = this.addTempVar(node),
-            bindee;
+        var temp = this.addTempVar(node),
+            obj = node.object.text,
+            prop = node.property.text;
 
-        if (!left) {
-
-            var right$0 = this.unwrapParens(node.right);
-            bindee = "((" + (temp) + " = " + (right$0.object.text) + ")." + (right$0.property.text) + ")";
-
-        } else {
-
-            bindee = "(" + (temp) + " = " + (left) + ", " + (node.right.text) + ")";
-        }
-
-        if (node.parent.type === "CallExpression" &&
-            node.parent.callee === node) {
-
-            node.parent.injectThisArg = temp;
-            return bindee;
-        }
-
-        return "" + (bindee) + ".bind(" + (temp) + ")";
+        return "(" + (temp) + " = " + (obj) + ")." + (prop) + ".bind(" + (temp) + ")";
     },
 
     ArrowFunction: function(node) {
