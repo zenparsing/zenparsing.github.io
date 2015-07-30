@@ -1955,6 +1955,27 @@ var Observable = _esdown.class(function(__) { var Observable;
             error: function(value) { return observer.error(value) },
             complete: function(value) { return observer.complete(value) },
         }); });
+    },
+
+    do: function(fn) { var __this = this; 
+
+        return new Promise(function(resolve, reject) {
+
+            if (typeof fn !== "function")
+                throw new TypeError(fn + " is not a function");
+
+            __this.subscribe({
+
+                next: function(value) {
+
+                    try { return fn(value) }
+                    catch (x) { reject(x) }
+                },
+
+                error: reject,
+                complete: resolve,
+            });
+        });
     }});
 
     __(_esdown.computed({}, Symbol.asyncIterator, { _: function() { return _esdown.asyncGen(function*() { var __$0; 
@@ -10907,6 +10928,27 @@ class Observable {\n\
             error(value) { return observer.error(value) },\n\
             complete(value) { return observer.complete(value) },\n\
         }));\n\
+    }\n\
+\n\
+    do(fn) {\n\
+\n\
+        return new Promise((resolve, reject) => {\n\
+\n\
+            if (typeof fn !== \"function\")\n\
+                throw new TypeError(fn + \" is not a function\");\n\
+\n\
+            this.subscribe({\n\
+\n\
+                next(value) {\n\
+\n\
+                    try { return fn(value) }\n\
+                    catch (x) { reject(x) }\n\
+                },\n\
+\n\
+                error: reject,\n\
+                complete: resolve,\n\
+            });\n\
+        });\n\
     }\n\
 \n\
     async *[Symbol.asyncIterator]() {\n\
