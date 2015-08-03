@@ -1887,6 +1887,8 @@ var Observable = _esdown.class(function(__) { var Observable;
 
         return new C(function(observer) {
 
+            var stop = false;
+
             enqueueJob(function(_) {
 
                 try {
@@ -1957,7 +1959,7 @@ var Observable = _esdown.class(function(__) { var Observable;
         }); });
     },
 
-    do: function(fn) { var __this = this; 
+    forEach: function(fn) { var __this = this; 
 
         return new Promise(function(resolve, reject) {
 
@@ -10860,6 +10862,8 @@ class Observable {\n\
 \n\
         return new C(observer => {\n\
 \n\
+            let stop = false;\n\
+\n\
             enqueueJob(_=> {\n\
 \n\
                 try {\n\
@@ -10930,7 +10934,7 @@ class Observable {\n\
         }));\n\
     }\n\
 \n\
-    do(fn) {\n\
+    forEach(fn) {\n\
 \n\
         return new Promise((resolve, reject) => {\n\
 \n\
