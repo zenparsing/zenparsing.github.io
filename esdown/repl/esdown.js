@@ -1675,12 +1675,6 @@ function cleanupSubscription(observer) {
     cleanup();
 }
 
-function cancelSubscription(observer) {
-
-    observer._observer = undefined;
-    cleanupSubscription(observer);
-}
-
 function subscriptionClosed(observer) {
 
     return observer._observer === undefined;
@@ -1692,6 +1686,12 @@ var SubscriptionObserver = _esdown.class(function(__) { var SubscriptionObserver
 
         this._observer = observer;
         this._cleanup = undefined;
+    },
+
+    cancel: function() {
+
+        this._observer = undefined;
+        cleanupSubscription(this);
     },
 
     get closed() { return subscriptionClosed(this) },
@@ -1718,7 +1718,7 @@ var SubscriptionObserver = _esdown.class(function(__) { var SubscriptionObserver
         } catch (e) {
 
             // If the observer throws, then close the stream and rethrow the error
-            cancelSubscription(this);
+            this.cancel();
             throw e;
         }
     },
@@ -1820,7 +1820,28 @@ var Observable = _esdown.class(function(__) { var Observable;
         if (subscriptionClosed(observer))
             cleanupSubscription(observer);
 
-        return function(_) { cancelSubscription(observer) };
+        return function(_) { observer.cancel() };
+    },
+
+    forEach: function(fn) { var __this = this; 
+
+        return new Promise(function(resolve, reject) {
+
+            if (typeof fn !== "function")
+                throw new TypeError(fn + " is not a function");
+
+            __this.subscribe({
+
+                next: function(value) {
+
+                    try { return fn(value) }
+                    catch (x) { reject(x) }
+                },
+
+                error: reject,
+                complete: resolve,
+            });
+        });
     }});
 
     __(_esdown.computed({}, Symbol.observable, { _: function() { return this } }));
@@ -1886,8 +1907,6 @@ var Observable = _esdown.class(function(__) { var Observable;
         var C = typeof this === "function" ? this : Observable;
 
         return new C(function(observer) {
-
-            var stop = false;
 
             enqueueJob(function(_) {
 
@@ -1957,27 +1976,6 @@ var Observable = _esdown.class(function(__) { var Observable;
             error: function(value) { return observer.error(value) },
             complete: function(value) { return observer.complete(value) },
         }); });
-    },
-
-    forEach: function(fn) { var __this = this; 
-
-        return new Promise(function(resolve, reject) {
-
-            if (typeof fn !== "function")
-                throw new TypeError(fn + " is not a function");
-
-            __this.subscribe({
-
-                next: function(value) {
-
-                    try { return fn(value) }
-                    catch (x) { reject(x) }
-                },
-
-                error: reject,
-                complete: resolve,
-            });
-        });
     }});
 
     __(_esdown.computed({}, Symbol.asyncIterator, { _: function() { return _esdown.asyncGen(function*() { var __$0; 
@@ -3067,14 +3065,6 @@ function PrivateDeclaration(isStatic, name, initializer, start, end) {
     this.initializer = initializer;
 }
 
-function ClassStaticBlock(statements, start, end) {
-
-    this.type = "ClassStaticBlock";
-    this.start = start;
-    this.end = end;
-    this.statements = statements;
-}
-
 function ImportDeclaration(imports, from, start, end) {
 
     this.type = "ImportDeclaration";
@@ -3245,7 +3235,6 @@ exports.ClassExpression = ClassExpression;
 exports.ClassBody = ClassBody;
 exports.EmptyClassElement = EmptyClassElement;
 exports.PrivateDeclaration = PrivateDeclaration;
-exports.ClassStaticBlock = ClassStaticBlock;
 exports.ImportDeclaration = ImportDeclaration;
 exports.NamespaceImport = NamespaceImport;
 exports.NamedImports = NamedImports;
@@ -8127,14 +8116,6 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
                 case "PrivateDeclaration":
                     atNames.add(elem$0.name, "");
                     break;
-
-                case "ClassStaticBlock":
-
-                    if (hasBlock)
-                        this.fail("Duplicate static initialization block", elem$0);
-
-                    hasBlock = true;
-                    break;
             }
 
             list.push(elem$0);
@@ -8188,10 +8169,6 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
                 case "(":
                     break;
 
-                case "{":
-                    return this.ClassStaticBlock();
-                    break;
-
                 default:
                     this.read();
                     isStatic = true;
@@ -8226,19 +8203,6 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
         method.static = isStatic;
 
         return method;
-    },
-
-    ClassStaticBlock: function() {
-
-        var start = this.nodeStart();
-
-        this.read("IDENTIFIER");
-
-        this.read("{");
-        var list = this.StatementList(false, false);
-        this.read("}");
-
-        return new AST.ClassStaticBlock(list, start, this.nodeEnd());
     },
 
     // === Modules ===
@@ -10650,12 +10614,6 @@ function cleanupSubscription(observer) {\n\
     cleanup();\n\
 }\n\
 \n\
-function cancelSubscription(observer) {\n\
-\n\
-    observer._observer = undefined;\n\
-    cleanupSubscription(observer);\n\
-}\n\
-\n\
 function subscriptionClosed(observer) {\n\
 \n\
     return observer._observer === undefined;\n\
@@ -10667,6 +10625,12 @@ class SubscriptionObserver {\n\
 \n\
         this._observer = observer;\n\
         this._cleanup = undefined;\n\
+    }\n\
+\n\
+    cancel() {\n\
+\n\
+        this._observer = undefined;\n\
+        cleanupSubscription(this);\n\
     }\n\
 \n\
     get closed() { return subscriptionClosed(this) }\n\
@@ -10693,7 +10657,7 @@ class SubscriptionObserver {\n\
         } catch (e) {\n\
 \n\
             // If the observer throws, then close the stream and rethrow the error\n\
-            cancelSubscription(this);\n\
+            this.cancel();\n\
             throw e;\n\
         }\n\
     }\n\
@@ -10795,7 +10759,28 @@ class Observable {\n\
         if (subscriptionClosed(observer))\n\
             cleanupSubscription(observer);\n\
 \n\
-        return _=> { cancelSubscription(observer) };\n\
+        return _=> { observer.cancel() };\n\
+    }\n\
+\n\
+    forEach(fn) {\n\
+\n\
+        return new Promise((resolve, reject) => {\n\
+\n\
+            if (typeof fn !== \"function\")\n\
+                throw new TypeError(fn + \" is not a function\");\n\
+\n\
+            this.subscribe({\n\
+\n\
+                next(value) {\n\
+\n\
+                    try { return fn(value) }\n\
+                    catch (x) { reject(x) }\n\
+                },\n\
+\n\
+                error: reject,\n\
+                complete: resolve,\n\
+            });\n\
+        });\n\
     }\n\
 \n\
     [Symbol.observable]() { return this }\n\
@@ -10861,8 +10846,6 @@ class Observable {\n\
         let C = typeof this === \"function\" ? this : Observable;\n\
 \n\
         return new C(observer => {\n\
-\n\
-            let stop = false;\n\
 \n\
             enqueueJob(_=> {\n\
 \n\
@@ -10932,27 +10915,6 @@ class Observable {\n\
             error(value) { return observer.error(value) },\n\
             complete(value) { return observer.complete(value) },\n\
         }));\n\
-    }\n\
-\n\
-    forEach(fn) {\n\
-\n\
-        return new Promise((resolve, reject) => {\n\
-\n\
-            if (typeof fn !== \"function\")\n\
-                throw new TypeError(fn + \" is not a function\");\n\
-\n\
-            this.subscribe({\n\
-\n\
-                next(value) {\n\
-\n\
-                    try { return fn(value) }\n\
-                    catch (x) { reject(x) }\n\
-                },\n\
-\n\
-                error: reject,\n\
-                complete: resolve,\n\
-            });\n\
-        });\n\
     }\n\
 \n\
     async *[Symbol.asyncIterator]() {\n\
@@ -12067,11 +12029,6 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
             text = text.slice(1, -1) + " " + footer.join(" ") + " }";
 
         return text;
-    },
-
-    ClassStaticBlock: function(node) {
-
-        return "(function() " + this.stringify(node).replace(/^static\s/, "") + ")()";
     },
 
     TaggedTemplateExpression: function(node) {
