@@ -1690,6 +1690,9 @@ var SubscriptionObserver = _esdown.class(function(__) { var SubscriptionObserver
 
     cancel: function() {
 
+        if (subscriptionClosed(this))
+            return;
+
         this._observer = undefined;
         cleanupSubscription(this);
     },
@@ -1718,8 +1721,8 @@ var SubscriptionObserver = _esdown.class(function(__) { var SubscriptionObserver
         } catch (e) {
 
             // If the observer throws, then close the stream and rethrow the error
-            this.cancel();
-            throw e;
+            try { this.cancel() }
+            finally { throw e }
         }
     },
 
@@ -1740,12 +1743,17 @@ var SubscriptionObserver = _esdown.class(function(__) { var SubscriptionObserver
             if (!m$1)
                 throw value;
 
-            return m$1.call(observer, value);
+            value = m$1.call(observer, value);
 
-        } finally {
+        } catch (e) {
 
-            cleanupSubscription(this);
+            try { cleanupSubscription(this) }
+            finally { throw e }
         }
+
+        cleanupSubscription(this);
+
+        return value;
     },
 
     complete: function(value) {
@@ -1762,15 +1770,17 @@ var SubscriptionObserver = _esdown.class(function(__) { var SubscriptionObserver
             var m$2 = getMethod(observer, "complete");
 
             // If the sink does not support "complete", then return undefined
-            if (!m$2)
-                return undefined;
+            value = m$2 ? m$2.call(observer, value) : undefined;
 
-            return m$2.call(observer, value);
+        } catch (e) {
 
-        } finally {
-
-            cleanupSubscription(this);
+            try { cleanupSubscription(this) }
+            finally { throw e }
         }
+
+        cleanupSubscription(this);
+
+        return value;
     }});
 
  });
@@ -1796,6 +1806,11 @@ var Observable = _esdown.class(function(__) { var Observable;
 
         // Wrap the observer in order to maintain observation invariants
         observer = new SubscriptionObserver(observer);
+
+        // NOTE: This logic can be moved into the SubscriptionObserver
+        // constructor to avoid cross-class private state access.  Should
+        // it be moved?  To what extent is the SubscriptionObserver constructor
+        // observable?
 
         try {
 
@@ -1893,6 +1908,8 @@ var Observable = _esdown.class(function(__) { var Observable;
 
                 } catch (x) {
 
+                    // If observer.next throws an error, then the subscription will
+                    // be closed and the error method will simply rethrow
                     observer.error(x);
                     return;
                 }
@@ -1910,23 +1927,15 @@ var Observable = _esdown.class(function(__) { var Observable;
 
             enqueueJob(function(_) {
 
-                try {
+                if (observer.closed)
+                    return;
+
+                for (var i$9 = 0; i$9 < items.length; ++i$9) {
+
+                    observer.next(items[i$9]);
 
                     if (observer.closed)
                         return;
-
-                    for (var i$9 = 0; i$9 < items.length; ++i$9) {
-
-                        observer.next(items[i$9]);
-
-                        if (observer.closed)
-                            return;
-                    }
-
-                } catch (x) {
-
-                    observer.error(x);
-                    return;
                 }
 
                 observer.complete();
@@ -10629,6 +10638,9 @@ class SubscriptionObserver {\n\
 \n\
     cancel() {\n\
 \n\
+        if (subscriptionClosed(this))\n\
+            return;\n\
+\n\
         this._observer = undefined;\n\
         cleanupSubscription(this);\n\
     }\n\
@@ -10657,8 +10669,8 @@ class SubscriptionObserver {\n\
         } catch (e) {\n\
 \n\
             // If the observer throws, then close the stream and rethrow the error\n\
-            this.cancel();\n\
-            throw e;\n\
+            try { this.cancel() }\n\
+            finally { throw e }\n\
         }\n\
     }\n\
 \n\
@@ -10679,12 +10691,17 @@ class SubscriptionObserver {\n\
             if (!m)\n\
                 throw value;\n\
 \n\
-            return m.call(observer, value);\n\
+            value = m.call(observer, value);\n\
 \n\
-        } finally {\n\
+        } catch (e) {\n\
 \n\
-            cleanupSubscription(this);\n\
+            try { cleanupSubscription(this) }\n\
+            finally { throw e }\n\
         }\n\
+\n\
+        cleanupSubscription(this);\n\
+\n\
+        return value;\n\
     }\n\
 \n\
     complete(value) {\n\
@@ -10701,15 +10718,17 @@ class SubscriptionObserver {\n\
             let m = getMethod(observer, \"complete\");\n\
 \n\
             // If the sink does not support \"complete\", then return undefined\n\
-            if (!m)\n\
-                return undefined;\n\
+            value = m ? m.call(observer, value) : undefined;\n\
 \n\
-            return m.call(observer, value);\n\
+        } catch (e) {\n\
 \n\
-        } finally {\n\
-\n\
-            cleanupSubscription(this);\n\
+            try { cleanupSubscription(this) }\n\
+            finally { throw e }\n\
         }\n\
+\n\
+        cleanupSubscription(this);\n\
+\n\
+        return value;\n\
     }\n\
 \n\
 }\n\
@@ -10735,6 +10754,11 @@ class Observable {\n\
 \n\
         // Wrap the observer in order to maintain observation invariants\n\
         observer = new SubscriptionObserver(observer);\n\
+\n\
+        // NOTE: This logic can be moved into the SubscriptionObserver\n\
+        // constructor to avoid cross-class private state access.  Should\n\
+        // it be moved?  To what extent is the SubscriptionObserver constructor\n\
+        // observable?\n\
 \n\
         try {\n\
 \n\
@@ -10832,6 +10856,8 @@ class Observable {\n\
 \n\
                 } catch (x) {\n\
 \n\
+                    // If observer.next throws an error, then the subscription will\n\
+                    // be closed and the error method will simply rethrow\n\
                     observer.error(x);\n\
                     return;\n\
                 }\n\
@@ -10849,23 +10875,15 @@ class Observable {\n\
 \n\
             enqueueJob(_=> {\n\
 \n\
-                try {\n\
+                if (observer.closed)\n\
+                    return;\n\
+\n\
+                for (let i = 0; i < items.length; ++i) {\n\
+\n\
+                    observer.next(items[i]);\n\
 \n\
                     if (observer.closed)\n\
                         return;\n\
-\n\
-                    for (let i = 0; i < items.length; ++i) {\n\
-\n\
-                        observer.next(items[i]);\n\
-\n\
-                        if (observer.closed)\n\
-                            return;\n\
-                    }\n\
-\n\
-                } catch (x) {\n\
-\n\
-                    observer.error(x);\n\
-                    return;\n\
                 }\n\
 \n\
                 observer.complete();\n\
@@ -12185,9 +12203,7 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
 
         function propGet(name) {
 
-            return /^[\.\d'"]/.test(name) ?
-                "[" + name + "]" :
-                "." + name;
+            return /^[\.\d'"]/.test(name) ? "[" + name + "]" : "." + name;
         }
 
         var outer = [],
@@ -12293,8 +12309,11 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
 
                 ast.properties.forEach(function(p) {
 
+                    var node = p.name,
+                        name = node.type === 'Identifier' ? node.value : node.text;
+
                     init = p.initializer ? p.initializer.text : "";
-                    child = new PatternTreeNode(p.name.text, init);
+                    child = new PatternTreeNode(name, init);
 
                     parent.children.push(child);
                     __this.createPatternTree(p.pattern || p.name, child);
