@@ -2155,15 +2155,6 @@ function PipeExpression(left, right, args, start, end) {
     this.arguments = args;
 }
 
-function BindExpression(obj, prop, start, end) {
-
-    this.type = "BindExpression";
-    this.start = start;
-    this.end = end;
-    this.object = obj;
-    this.property = prop;
-}
-
 function CallExpression(callee, args, start, end) {
 
     this.type = "CallExpression";
@@ -2733,7 +2724,6 @@ exports.UnaryExpression = UnaryExpression;
 exports.MemberExpression = MemberExpression;
 exports.MetaProperty = MetaProperty;
 exports.PipeExpression = PipeExpression;
-exports.BindExpression = BindExpression;
 exports.CallExpression = CallExpression;
 exports.TaggedTemplateExpression = TaggedTemplateExpression;
 exports.NewExpression = NewExpression;
@@ -3814,7 +3804,6 @@ var multiCharPunctuator = new RegExp("^(?:" +
     ">>>?=?|" +
     "[!=]==|" +
     "[=-]>|" +
-    "::|" +
     "[\.]{2,3}|" +
     "[-+&|<>!=*&\^%\/]=" +
 ")$");
@@ -6170,18 +6159,6 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
                     expr = new AST.TaggedTemplateExpression(
                         expr,
                         this.TemplateExpression(),
-                        start,
-                        this.nodeEnd());
-
-                    break;
-
-                case "::":
-
-                    this.read();
-
-                    expr = new AST.BindExpression(
-                        expr,
-                        this.IdentifierName(),
                         start,
                         this.nodeEnd());
 
@@ -10845,15 +10822,6 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
             args += ", " + this.joinList(node.arguments);
 
         return "" + (callee) + "(" + (args) + ")";
-    },
-
-    BindExpression: function(node) {
-
-        var temp = this.addTempVar(node),
-            obj = node.object.text,
-            prop = node.property.text;
-
-        return "(" + (temp) + " = " + (obj) + ")." + (prop) + ".bind(" + (temp) + ")";
     },
 
     ArrowFunction: function(node) {
