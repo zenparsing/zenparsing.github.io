@@ -1,4 +1,4 @@
-/*=esdown=*/(function(fn, deps, name) { function obj() { return {} } if (typeof exports !== 'undefined') fn(require, exports, module); else if (typeof define === 'function' && define.amd) define(['require', 'exports', 'module'].concat(deps), fn); else if (typeof window !== 'undefined' && name) fn(obj, window[name] = {}, {}); else fn(obj, {}, {}); })(function(require, exports, module) { 'use strict'; function __load(p, l) { module.__es6 = !l; var e = require(p); if (e && e.constructor !== Object) e.default = e; return e; } 
+/*=esdown=*/(function(fn, deps, name) { function obj() { return {} } if (typeof exports !== 'undefined') fn(require, exports, module); else if (typeof define === 'function' && define.amd) define(['require', 'exports', 'module'].concat(deps), fn); else if (typeof self !== 'undefined' && name) fn(obj, name === '*' ? self : (self[name] = {}), {}); else fn(obj, {}, {}); })(function(require, exports, module) { 'use strict'; function __load(p, l) { module.__es6 = !l; var e = require(p); if (e && e.constructor !== Object) e.default = e; return e; } 
 var _esdown; (function() {
 
 var VERSION = "0.9.11";
@@ -26,10 +26,15 @@ function forEachDesc(obj, fn) {
     for (var i$0 = 0; i$0 < names.length; ++i$0)
         fn(names[i$0], Object.getOwnPropertyDescriptor(obj, names[i$0]));
 
-    names = Object.getOwnPropertySymbols(obj);
+    var getSymbols = Object.getOwnPropertySymbols;
 
-    for (var i$1 = 0; i$1 < names.length; ++i$1)
-        fn(names[i$1], Object.getOwnPropertyDescriptor(obj, names[i$1]));
+    if (getSymbols) {
+
+        names = getSymbols.call(null, obj);
+
+        for (var i$1 = 0; i$1 < names.length; ++i$1)
+            fn(names[i$1], Object.getOwnPropertyDescriptor(obj, names[i$1]));
+    }
 
     return obj;
 }
@@ -8499,10 +8504,15 @@ function forEachDesc(obj, fn) {\n\
     for (let i = 0; i < names.length; ++i)\n\
         fn(names[i], Object.getOwnPropertyDescriptor(obj, names[i]));\n\
 \n\
-    names = Object.getOwnPropertySymbols(obj);\n\
+    let getSymbols = Object.getOwnPropertySymbols;\n\
 \n\
-    for (let i = 0; i < names.length; ++i)\n\
-        fn(names[i], Object.getOwnPropertyDescriptor(obj, names[i]));\n\
+    if (getSymbols) {\n\
+\n\
+        names = getSymbols.call(null, obj);\n\
+\n\
+        for (let i = 0; i < names.length; ++i)\n\
+            fn(names[i], Object.getOwnPropertyDescriptor(obj, names[i]));\n\
+    }\n\
 \n\
     return obj;\n\
 }\n\
@@ -11818,8 +11828,8 @@ var WRAP_CALLEE = "(function(fn, deps, name) { " +
         "define(['require', 'exports', 'module'].concat(deps), fn); " +
 
     // DOM global module:
-    "else if (typeof window !== 'undefined' && name) " +
-        "fn(obj, window[name] = {}, {}); " +
+    "else if (typeof self !== 'undefined' && name) " +
+        "fn(obj, name === '*' ? self : (self[name] = {}), {}); " +
 
     // Hail Mary:
     "else " +
@@ -12401,7 +12411,7 @@ exports.startREPL = startREPL;
 (function(exports) {
 
 var Path = _M3;
-var readFile = _M5.readFile;
+var readFile = _M5.readFile, writeFile = _M5.writeFile;
 var isPackageSpecifier = _M14.isPackageSpecifier, locateModule = _M14.locateModule;
 var translate = _M8.translate, wrapModule = _M8.wrapModule;
 var Replacer = _M15.Replacer;
@@ -12587,13 +12597,20 @@ function bundle(rootPath, options) { if (options === void 0) options = {};
         if (options.runtime || options.polyfill) {
 
             output = translate("", {
+
                 runtime: options.runtime,
                 polyfill: options.polyfill,
                 module: true,
+
             }) + "\n\n" + output;
         }
 
-        return wrapModule(output, dependencies, options.global);
+        output = wrapModule(output, dependencies, options.global);
+
+        if (options.output)
+            return writeFile(Path.resolve(options.output), output, "utf8").then(function(_) { return ""; });
+
+        return output;
     });
 }
 
