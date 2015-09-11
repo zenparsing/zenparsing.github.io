@@ -1,9 +1,8 @@
-/*=esdown=*/(function(fn, deps, name) { function obj() { return {} } if (typeof exports !== 'undefined') fn(require, exports, module); else if (typeof define === 'function' && define.amd) define(['require', 'exports', 'module'].concat(deps), fn); else if (typeof self !== 'undefined' && name) fn(obj, name === '*' ? self : (self[name] = {}), {}); else fn(obj, {}, {}); })(function(require, exports, module) { 'use strict'; function __load(p, l) { module.__es6 = !l; var e = require(p); if (e && e.constructor !== Object) e.default = e; return e; } 
-var _esdown; (function() {
+/*=esdown=*/(function(fn, name) { if (typeof exports !== 'undefined') fn(require, exports, module); else if (typeof self !== 'undefined') fn(function() { return {} }, name === '*' ? self : (self[name] = {}), {}); })(function(require, exports, module) { 'use strict'; function __import(e) { return !e || e.constructor === Object ? e : Object.create(e, { 'default': { value: e } }); } var _M2 = __import(require("fs")), _M3 = __import(require("path")), _M11 = __import(require("repl")), _M12 = __import(require("vm")), _M13 = __import(require("util")); var _esdown = {}; (function(exports) {
 
-var VERSION = "0.9.11";
+var VERSION = "0.9.13";
 
-var Global = (function() {
+var GLOBAL = (function() {
 
     try { return global.global } catch (x) {}
     try { return self.self } catch (x) {}
@@ -30,7 +29,7 @@ function forEachDesc(obj, fn) {
 
     if (getSymbols) {
 
-        names = getSymbols.call(null, obj);
+        names = getSymbols(obj);
 
         for (var i$1 = 0; i$1 < names.length; ++i$1)
             fn(names[i$1], Object.getOwnPropertyDescriptor(obj, names[i$1]));
@@ -61,7 +60,7 @@ function mergeProperties(target, source, enumerable) {
 }
 
 // Builds a class
-function buildClass(base, def) {
+function makeClass(base, def) {
 
     var parent;
 
@@ -122,287 +121,268 @@ function buildClass(base, def) {
     return ctor;
 }
 
-// The "_esdown" must be defined in the outer scope
-_esdown = {
+// Support for computed property names
+function computed(target) {
 
-    version: VERSION,
+    for (var i$2 = 1; i$2 < arguments.length; i$2 += 3) {
 
-    global: Global,
+        var desc$0 = Object.getOwnPropertyDescriptor(arguments[i$2 + 1], "_");
+        mergeProperty(target, arguments[i$2], desc$0, true);
 
-    class: buildClass,
+        if (i$2 + 2 < arguments.length)
+            mergeProperties(target, arguments[i$2 + 2], true);
+    }
 
-    // Support for computed property names
-    computed: function(target) {
+    return target;
+}
 
-        for (var i$2 = 1; i$2 < arguments.length; i$2 += 3) {
+// Support for async functions
+function asyncFunction(iter) {
 
-            var desc$0 = Object.getOwnPropertyDescriptor(arguments[i$2 + 1], "_");
-            mergeProperty(target, arguments[i$2], desc$0, true);
+    return new Promise(function(resolve, reject) {
 
-            if (i$2 + 2 < arguments.length)
-                mergeProperties(target, arguments[i$2 + 2], true);
-        }
-
-        return target;
-    },
-
-    // Support for tagged templates
-    callSite: function(values, raw) {
-
-        values.raw = raw || values;
-        return values;
-    },
-
-    // Support for async functions
-    async: function(iter) {
-
-        return new Promise(function(resolve, reject) {
-
-            resume("next", void 0);
-
-            function resume(type, value) {
-
-                try {
-
-                    var result$0 = iter[type](value);
-
-                    if (result$0.done) {
-
-                        resolve(result$0.value);
-
-                    } else {
-
-                        Promise.resolve(result$0.value).then(
-                            function(x) { return resume("next", x); },
-                            function(x) { return resume("throw", x); });
-                    }
-
-                } catch (x) { reject(x) }
-            }
-        });
-    },
-
-    // Support for async generators
-    asyncGen: function(iter) {
-
-        var front = null, back = null;
-
-        return _esdown.computed({
-
-            next: function(val) { return send("next", val) },
-            throw: function(val) { return send("throw", val) },
-            return: function(val) { return send("return", val) },
-            }, Symbol.asyncIterator, { _: function() { return this },
-        });
-
-        function send(type, value) {
-
-            return new Promise(function(resolve, reject) {
-
-                var x = { type: type, value: value, resolve: resolve, reject: reject, next: null };
-
-                if (back) {
-
-                    // If list is not empty, then push onto the end
-                    back = back.next = x;
-
-                } else {
-
-                    // Create new list and resume generator
-                    front = back = x;
-                    resume(type, value);
-                }
-            });
-        }
-
-        function fulfill(type, value) {
-
-            switch (type) {
-
-                case "return":
-                    front.resolve({ value: value, done: true });
-                    break;
-
-                case "throw":
-                    front.reject(value);
-                    break;
-
-                default:
-                    front.resolve({ value: value, done: false });
-                    break;
-            }
-
-            front = front.next;
-
-            if (front) resume(front.type, front.value);
-            else back = null;
-        }
-
-        function awaitValue(result) {
-
-            var value = result.value;
-
-            if (typeof value === "object" && "_esdown_await" in value) {
-
-                if (result.done)
-                    throw new Error("Invalid async generator return");
-
-                return value._esdown_await;
-            }
-
-            return null;
-        }
+        resume("next", void 0);
 
         function resume(type, value) {
 
-            // HACK: If the generator does not support the "return" method, then
-            // emulate it (poorly) using throw.  (V8 circa 2015-02-13 does not support
-            // generator.return.)
-            if (type === "return" && !(type in iter)) {
-
-                type = "throw";
-                value = { value: value, __return: true };
-            }
-
             try {
 
-                var result$1 = iter[type](value),
-                    awaited$0 = awaitValue(result$1);
+                var result$0 = iter[type](value);
 
-                if (awaited$0) {
+                if (result$0.done) {
 
-                    Promise.resolve(awaited$0).then(
+                    resolve(result$0.value);
+
+                } else {
+
+                    Promise.resolve(result$0.value).then(
                         function(x) { return resume("next", x); },
                         function(x) { return resume("throw", x); });
-
-                } else {
-
-                    Promise.resolve(result$1.value).then(
-                        function(x) { return fulfill(result$1.done ? "return" : "normal", x); },
-                        function(x) { return fulfill("throw", x); });
                 }
 
-            } catch (x) {
-
-                // HACK: Return-as-throw
-                if (x && x.__return === true)
-                    return fulfill("return", x.value);
-
-                fulfill("throw", x);
-            }
+            } catch (x) { reject(x) }
         }
-    },
+    });
+}
 
-    // Support for spread operations
-    spread: function(initial) {
+// Support for async generators
+function asyncGenerator(iter) {
 
-        return {
+    var front = null, back = null;
 
-            a: initial || [],
+    var aIter = {
 
-            // Add items
-            s: function() {
+        next: function(val) { return send("next", val) },
+        throw: function(val) { return send("throw", val) },
+        return: function(val) { return send("return", val) },
+    };
 
-                for (var i$3 = 0; i$3 < arguments.length; ++i$3)
-                    this.a.push(arguments[i$3]);
+    aIter[Symbol.asyncIterator] = function() { return this };
+    return aIter;
 
-                return this;
-            },
+    function send(type, value) {
 
-            // Add the contents of iterables
-            i: function(list) {
+        return new Promise(function(resolve, reject) {
 
-                if (Array.isArray(list)) {
+            var x = { type: type, value: value, resolve: resolve, reject: reject, next: null };
 
-                    this.a.push.apply(this.a, list);
+            if (back) {
 
-                } else {
+                // If list is not empty, then push onto the end
+                back = back.next = x;
 
-                    for (var __$0 = (list)[Symbol.iterator](), __$1; __$1 = __$0.next(), !__$1.done;)
-                        { var item$0 = __$1.value; this.a.push(item$0); }
-                }
+            } else {
 
-                return this;
+                // Create new list and resume generator
+                front = back = x;
+                resume(type, value);
             }
-
-        };
-    },
-
-    // Support for object destructuring
-    objd: function(obj) {
-
-        return toObject(obj);
-    },
-
-    // Support for array destructuring
-    arrayd: function(obj) {
-
-        if (Array.isArray(obj)) {
-
-            return {
-
-                at: function(skip, pos) { return obj[pos] },
-                rest: function(skip, pos) { return obj.slice(pos) }
-            };
-        }
-
-        var iter = toObject(obj)[Symbol.iterator]();
-
-        return {
-
-            at: function(skip) {
-
-                var r;
-
-                while (skip--)
-                    r = iter.next();
-
-                return r.value;
-            },
-
-            rest: function(skip) {
-
-                var a = [], r;
-
-                while (--skip)
-                    r = iter.next();
-
-                while (r = iter.next(), !r.done)
-                    a.push(r.value);
-
-                return a;
-            }
-        };
-    },
-
-    // Support for private fields
-    getPrivate: function(obj, map, name) {
-
-        var entry = map.get(Object(obj));
-
-        if (!entry)
-            throw new TypeError;
-
-        return entry[name];
-    },
-
-    setPrivate: function(obj, map, name, value) {
-
-        var entry = map.get(Object(obj));
-
-        if (!entry)
-            throw new TypeError;
-
-        return entry[name] = value;
+        });
     }
 
-};
+    function fulfill(type, value) {
+
+        switch (type) {
+
+            case "return":
+                front.resolve({ value: value, done: true });
+                break;
+
+            case "throw":
+                front.reject(value);
+                break;
+
+            default:
+                front.resolve({ value: value, done: false });
+                break;
+        }
+
+        front = front.next;
+
+        if (front) resume(front.type, front.value);
+        else back = null;
+    }
+
+    function awaitValue(result) {
+
+        var value = result.value;
+
+        if (typeof value === "object" && "_esdown_await" in value) {
+
+            if (result.done)
+                throw new Error("Invalid async generator return");
+
+            return value._esdown_await;
+        }
+
+        return null;
+    }
+
+    function resume(type, value) {
+
+        // HACK: If the generator does not support the "return" method, then
+        // emulate it (poorly) using throw.  (V8 circa 2015-02-13 does not support
+        // generator.return.)
+        if (type === "return" && !(type in iter)) {
+
+            type = "throw";
+            value = { value: value, __return: true };
+        }
+
+        try {
+
+            var result$1 = iter[type](value),
+                awaited$0 = awaitValue(result$1);
+
+            if (awaited$0) {
+
+                Promise.resolve(awaited$0).then(
+                    function(x) { return resume("next", x); },
+                    function(x) { return resume("throw", x); });
+
+            } else {
+
+                Promise.resolve(result$1.value).then(
+                    function(x) { return fulfill(result$1.done ? "return" : "normal", x); },
+                    function(x) { return fulfill("throw", x); });
+            }
+
+        } catch (x) {
+
+            // HACK: Return-as-throw
+            if (x && x.__return === true)
+                return fulfill("return", x.value);
+
+            fulfill("throw", x);
+        }
+    }
+}
+
+// Support for spread operations
+function spread(initial) {
+
+    return {
+
+        a: initial || [],
+
+        // Add items
+        s: function() {
+
+            for (var i$3 = 0; i$3 < arguments.length; ++i$3)
+                this.a.push(arguments[i$3]);
+
+            return this;
+        },
+
+        // Add the contents of iterables
+        i: function(list) {
+
+            if (Array.isArray(list)) {
+
+                this.a.push.apply(this.a, list);
+
+            } else {
+
+                for (var __$0 = (list)[Symbol.iterator](), __$1; __$1 = __$0.next(), !__$1.done;)
+                    { var item$0 = __$1.value; this.a.push(item$0); }
+            }
+
+            return this;
+        }
+
+    };
+}
+
+// Support for object destructuring
+function objd(obj) {
+
+    return toObject(obj);
+}
+
+// Support for array destructuring
+function arrayd(obj) {
+
+    if (Array.isArray(obj)) {
+
+        return {
+
+            at: function(skip, pos) { return obj[pos] },
+            rest: function(skip, pos) { return obj.slice(pos) }
+        };
+    }
+
+    var iter = toObject(obj)[Symbol.iterator]();
+
+    return {
+
+        at: function(skip) {
+
+            var r;
+
+            while (skip--)
+                r = iter.next();
+
+            return r.value;
+        },
+
+        rest: function(skip) {
+
+            var a = [], r;
+
+            while (--skip)
+                r = iter.next();
+
+            while (r = iter.next(), !r.done)
+                a.push(r.value);
+
+            return a;
+        }
+    };
+}
 
 
-}).call(this);
 
 
-_esdown.global._esdown = _esdown;
+
+
+
+
+
+exports.makeClass = makeClass;
+exports.computed = computed;
+exports.asyncFunction = asyncFunction;
+exports.asyncGenerator = asyncGenerator;
+exports.spread = spread;
+exports.objd = objd;
+exports.arrayd = arrayd;
+exports.class = makeClass;
+exports.version = VERSION;
+exports.global = GLOBAL;
+exports.async = asyncFunction;
+exports.asyncGen = asyncGenerator;
+
+
+})(_esdown);
 
 (function() {
 
@@ -412,16 +392,16 @@ function eachKey(obj, fn) {
 
     var keys = Object.getOwnPropertyNames(obj);
 
-    for (var i$4 = 0; i$4 < keys.length; ++i$4)
-        fn(keys[i$4]);
+    for (var i$0 = 0; i$0 < keys.length; ++i$0)
+        fn(keys[i$0]);
 
     if (!Object.getOwnPropertySymbols)
         return;
 
     keys = Object.getOwnPropertySymbols(obj);
 
-    for (var i$5 = 0; i$5 < keys.length; ++i$5)
-        fn(keys[i$5]);
+    for (var i$1 = 0; i$1 < keys.length; ++i$1)
+        fn(keys[i$1]);
 }
 
 function polyfill(obj, methods) {
@@ -531,9 +511,9 @@ polyfill(Object, {
 
         target = toObject(target);
 
-        for (var i$6 = 1; i$6 < arguments.length; ++i$6) {
+        for (var i$2 = 1; i$2 < arguments.length; ++i$2) {
 
-            source = arguments[i$6];
+            source = arguments[i$2];
 
             if (source != null) // null or undefined
                 Object.keys(source).forEach(function(key) { return target[key] = source[key]; });
@@ -651,7 +631,7 @@ function repeat(s, n) {
     return half + half;
 }
 
-var StringIterator = _esdown.class(function(__) { var StringIterator;
+var StringIterator = _esdown.class(function(__) { "use strict"; var StringIterator;
 
     __({ constructor: StringIterator = function(string) {
 
@@ -787,7 +767,7 @@ polyfill(String.prototype, _esdown.computed({
 
 // === Array ===
 
-var ArrayIterator = _esdown.class(function(__) { var ArrayIterator;
+var ArrayIterator = _esdown.class(function(__) { "use strict"; var ArrayIterator;
 
     __({ constructor: ArrayIterator = function(array, kind) {
 
@@ -846,13 +826,13 @@ polyfill(Array, {
         if (getIter) {
 
             var iter$0 = getIter.call(list),
-                result$2;
+                result$0;
 
             out = new ctor;
 
-            while (result$2 = iter$0.next(), !result$2.done) {
+            while (result$0 = iter$0.next(), !result$0.done) {
 
-                out[i++] = map ? map.call(thisArg, result$2.value, i) : result$2.value;
+                out[i++] = map ? map.call(thisArg, result$0.value, i) : result$0.value;
                 out.length = i;
             }
 
@@ -881,8 +861,8 @@ polyfill(Array, {
         var len = items.length,
             out = new ctor(len);
 
-        for (var i$7 = 0; i$7 < len; ++i$7)
-            out[i$7] = items[i$7];
+        for (var i$3 = 0; i$3 < len; ++i$3)
+            out[i$3] = items[i$3];
 
         out.length = len;
 
@@ -899,12 +879,12 @@ function arrayFind(obj, pred, thisArg, type) {
     if (typeof pred !== "function")
         throw new TypeError(pred + " is not a function");
 
-    for (var i$8 = 0; i$8 < len; ++i$8) {
+    for (var i$4 = 0; i$4 < len; ++i$4) {
 
-        val = obj[i$8];
+        val = obj[i$4];
 
-        if (pred.call(thisArg, val, i$8, obj))
-            return type === "value" ? val : i$8;
+        if (pred.call(thisArg, val, i$4, obj))
+            return type === "value" ? val : i$4;
     }
 
     return type === "value" ? void 0 : -1;
@@ -986,7 +966,7 @@ polyfill(Array.prototype, _esdown.computed({
 }));
 
 
-}).call(this);
+})();
 
 (function() {
 
@@ -994,7 +974,7 @@ var global = _esdown.global,
     ORIGIN = {},
     REMOVED = {};
 
-var MapNode = _esdown.class(function(__) { var MapNode;
+var MapNode = _esdown.class(function(__) { "use strict"; var MapNode;
 
     __({ constructor: MapNode = function(key, val) {
 
@@ -1021,7 +1001,7 @@ var MapNode = _esdown.class(function(__) { var MapNode;
 
  });
 
-var MapIterator = _esdown.class(function(__) { var MapIterator;
+var MapIterator = _esdown.class(function(__) { "use strict"; var MapIterator;
 
     __({ constructor: MapIterator = function(node, kind) {
 
@@ -1068,7 +1048,7 @@ function hashKey(key) {
     throw new TypeError("Map and Set keys must be strings or numbers in esdown");
 }
 
-var Map = _esdown.class(function(__) { var Map;
+var Map = _esdown.class(function(__) { "use strict"; var Map;
 
     __({ constructor: Map = function() {
 
@@ -1160,7 +1140,7 @@ var Map = _esdown.class(function(__) { var Map;
 
 var mapSet = Map.prototype.set;
 
-var Set = _esdown.class(function(__) { var Set;
+var Set = _esdown.class(function(__) { "use strict"; var Set;
 
     __({ constructor: Set = function() {
 
@@ -1191,7 +1171,7 @@ if (!global.Map || !global.Map.prototype.entries) {
 }
 
 
-}).call(this);
+})();
 
 (function() {
 
@@ -1591,11 +1571,11 @@ InstallFunctions($Promise.prototype, DONT_ENUM, [
 })();
 
 
-}).call(this);
+})();
 
 
 
-var _M2 = __load("fs", 1), _M3 = __load("path", 1), _M19 = {}, _M20 = {}, _M21 = {}, _M10 = {}, _M4 = {}, _M5 = {}, _M11 = __load("repl", 1), _M12 = __load("vm", 1), _M13 = __load("util", 1), _M28 = {}, _M24 = {}, _M31 = {}, _M29 = {}, _M30 = {}, _M25 = {}, _M26 = {}, _M27 = {}, _M22 = {}, _M23 = {}, _M18 = {}, _M9 = {}, _M17 = {}, _M16 = {}, _M15 = {}, _M8 = {}, _M14 = {}, _M6 = {}, _M7 = {}, _M1 = exports;
+var _M19 = {},_M20 = {},_M21 = {},_M10 = {},_M4 = {},_M5 = {},_M28 = {},_M24 = {},_M31 = {},_M29 = {},_M30 = {},_M25 = {},_M26 = {},_M27 = {},_M22 = {},_M23 = {},_M18 = {},_M9 = {},_M16 = {},_M17 = {},_M15 = {},_M8 = {},_M14 = {},_M6 = {},_M7 = {},_M1 = exports;
 
 (function(exports) {
 
@@ -1743,7 +1723,7 @@ var ConsoleCommand = _esdown.class(function(__) { var ConsoleCommand;
 exports.ConsoleCommand = ConsoleCommand;
 
 
-}).call(this, _M19);
+})(_M19);
 
 (function(exports) {
 
@@ -1815,7 +1795,7 @@ var ConsoleIO = _esdown.class(function(__) { var ConsoleIO;
 exports.ConsoleIO = ConsoleIO;
 
 
-}).call(this, _M20);
+})(_M20);
 
 (function(exports) {
 
@@ -1834,7 +1814,7 @@ var ConsoleStyle = {
 exports.ConsoleStyle = ConsoleStyle;
 
 
-}).call(this, _M21);
+})(_M21);
 
 (function(exports) {
 
@@ -1843,14 +1823,14 @@ Object.keys(_M20).forEach(function(k) { exports[k] = _M20[k]; });
 Object.keys(_M21).forEach(function(k) { exports[k] = _M21[k]; });
 
 
-}).call(this, _M10);
+})(_M10);
 
 (function(exports) {
 
 Object.keys(_M10).forEach(function(k) { exports[k] = _M10[k]; });
 
 
-}).call(this, _M4);
+})(_M4);
 
 (function(exports) {
 
@@ -1949,7 +1929,7 @@ exports.appendFile = appendFile;
 exports.realpath = realpath;
 
 
-}).call(this, _M5);
+})(_M5);
 
 (function(exports) {
 
@@ -2792,7 +2772,7 @@ exports.ExportDefaultFrom = ExportDefaultFrom;
 exports.ExportSpecifier = ExportSpecifier;
 
 
-}).call(this, _M28);
+})(_M28);
 
 (function(exports) {
 
@@ -2846,7 +2826,7 @@ var NodeBase = _esdown.class(function(__) { var NodeBase; __({ constructor: Node
 Object.keys(Nodes).forEach(function(k) { return Nodes[k].prototype = NodeBase.prototype; });
 
 
-}).call(this, _M24);
+})(_M24);
 
 (function(exports) {
 
@@ -3615,7 +3595,7 @@ exports.IDENTIFIER = IDENTIFIER;
 exports.WHITESPACE = WHITESPACE;
 
 
-}).call(this, _M31);
+})(_M31);
 
 (function(exports) {
 
@@ -3716,7 +3696,7 @@ exports.codePointAt = codePointAt;
 exports.codePointString = codePointString;
 
 
-}).call(this, _M29);
+})(_M29);
 
 (function(exports) {
 
@@ -3768,7 +3748,7 @@ var LineMap = _esdown.class(function(__) { var LineMap;
 exports.LineMap = LineMap;
 
 
-}).call(this, _M30);
+})(_M30);
 
 (function(exports) {
 
@@ -4802,7 +4782,7 @@ exports.isStrictReservedWord = isStrictReservedWord;
 exports.Scanner = Scanner;
 
 
-}).call(this, _M25);
+})(_M25);
 
 (function(exports) {
 
@@ -5014,7 +4994,7 @@ var Transform = _esdown.class(function(__) { var Transform; __({ constructor: Tr
 exports.Transform = Transform;
 
 
-}).call(this, _M26);
+})(_M26);
 
 (function(exports) {
 
@@ -5223,7 +5203,7 @@ var Validate = _esdown.class(function(__) { var Validate; __({ constructor: Vali
 exports.Validate = Validate;
 
 
-}).call(this, _M27);
+})(_M27);
 
 (function(exports) {
 
@@ -8060,7 +8040,7 @@ mixin(Parser, Transform, Validate);
 exports.Parser = Parser;
 
 
-}).call(this, _M22);
+})(_M22);
 
 (function(exports) {
 
@@ -8422,7 +8402,7 @@ var ScopeResolver = _esdown.class(function(__) { var ScopeResolver; __({ constru
 exports.ScopeResolver = ScopeResolver;
 
 
-}).call(this, _M23);
+})(_M23);
 
 (function(exports) {
 
@@ -8464,14 +8444,14 @@ exports.AST = AST;
 exports.parse = parse;
 
 
-}).call(this, _M18);
+})(_M18);
 
 (function(exports) {
 
 Object.keys(_M18).forEach(function(k) { exports[k] = _M18[k]; });
 
 
-}).call(this, _M9);
+})(_M9);
 
 (function(exports) {
 
@@ -8479,9 +8459,9 @@ var Runtime = {};
 
 Runtime.API = 
 
-"const VERSION = \"0.9.11\";\n\
+"const VERSION = \"0.9.13\";\n\
 \n\
-let Global = (function() {\n\
+const GLOBAL = (function() {\n\
 \n\
     try { return global.global } catch (x) {}\n\
     try { return self.self } catch (x) {}\n\
@@ -8508,7 +8488,7 @@ function forEachDesc(obj, fn) {\n\
 \n\
     if (getSymbols) {\n\
 \n\
-        names = getSymbols.call(null, obj);\n\
+        names = getSymbols(obj);\n\
 \n\
         for (let i = 0; i < names.length; ++i)\n\
             fn(names[i], Object.getOwnPropertyDescriptor(obj, names[i]));\n\
@@ -8539,7 +8519,7 @@ function mergeProperties(target, source, enumerable) {\n\
 }\n\
 \n\
 // Builds a class\n\
-function buildClass(base, def) {\n\
+export function makeClass(base, def) {\n\
 \n\
     let parent;\n\
 \n\
@@ -8600,280 +8580,251 @@ function buildClass(base, def) {\n\
     return ctor;\n\
 }\n\
 \n\
-// The \"_esdown\" must be defined in the outer scope\n\
-_esdown = {\n\
+// Support for computed property names\n\
+export function computed(target) {\n\
 \n\
-    version: VERSION,\n\
+    for (let i = 1; i < arguments.length; i += 3) {\n\
 \n\
-    global: Global,\n\
+        let desc = Object.getOwnPropertyDescriptor(arguments[i + 1], \"_\");\n\
+        mergeProperty(target, arguments[i], desc, true);\n\
 \n\
-    class: buildClass,\n\
+        if (i + 2 < arguments.length)\n\
+            mergeProperties(target, arguments[i + 2], true);\n\
+    }\n\
 \n\
-    // Support for computed property names\n\
-    computed(target) {\n\
+    return target;\n\
+}\n\
 \n\
-        for (let i = 1; i < arguments.length; i += 3) {\n\
+// Support for async functions\n\
+export function asyncFunction(iter) {\n\
 \n\
-            let desc = Object.getOwnPropertyDescriptor(arguments[i + 1], \"_\");\n\
-            mergeProperty(target, arguments[i], desc, true);\n\
+    return new Promise((resolve, reject) => {\n\
 \n\
-            if (i + 2 < arguments.length)\n\
-                mergeProperties(target, arguments[i + 2], true);\n\
-        }\n\
-\n\
-        return target;\n\
-    },\n\
-\n\
-    // Support for tagged templates\n\
-    callSite(values, raw) {\n\
-\n\
-        values.raw = raw || values;\n\
-        return values;\n\
-    },\n\
-\n\
-    // Support for async functions\n\
-    async(iter) {\n\
-\n\
-        return new Promise((resolve, reject) => {\n\
-\n\
-            resume(\"next\", void 0);\n\
-\n\
-            function resume(type, value) {\n\
-\n\
-                try {\n\
-\n\
-                    let result = iter[type](value);\n\
-\n\
-                    if (result.done) {\n\
-\n\
-                        resolve(result.value);\n\
-\n\
-                    } else {\n\
-\n\
-                        Promise.resolve(result.value).then(\n\
-                            x => resume(\"next\", x),\n\
-                            x => resume(\"throw\", x));\n\
-                    }\n\
-\n\
-                } catch (x) { reject(x) }\n\
-            }\n\
-        });\n\
-    },\n\
-\n\
-    // Support for async generators\n\
-    asyncGen(iter) {\n\
-\n\
-        let front = null, back = null;\n\
-\n\
-        return {\n\
-\n\
-            next(val) { return send(\"next\", val) },\n\
-            throw(val) { return send(\"throw\", val) },\n\
-            return(val) { return send(\"return\", val) },\n\
-            [Symbol.asyncIterator]() { return this },\n\
-        };\n\
-\n\
-        function send(type, value) {\n\
-\n\
-            return new Promise((resolve, reject) => {\n\
-\n\
-                let x = { type, value, resolve, reject, next: null };\n\
-\n\
-                if (back) {\n\
-\n\
-                    // If list is not empty, then push onto the end\n\
-                    back = back.next = x;\n\
-\n\
-                } else {\n\
-\n\
-                    // Create new list and resume generator\n\
-                    front = back = x;\n\
-                    resume(type, value);\n\
-                }\n\
-            });\n\
-        }\n\
-\n\
-        function fulfill(type, value) {\n\
-\n\
-            switch (type) {\n\
-\n\
-                case \"return\":\n\
-                    front.resolve({ value, done: true });\n\
-                    break;\n\
-\n\
-                case \"throw\":\n\
-                    front.reject(value);\n\
-                    break;\n\
-\n\
-                default:\n\
-                    front.resolve({ value, done: false });\n\
-                    break;\n\
-            }\n\
-\n\
-            front = front.next;\n\
-\n\
-            if (front) resume(front.type, front.value);\n\
-            else back = null;\n\
-        }\n\
-\n\
-        function awaitValue(result) {\n\
-\n\
-            let value = result.value;\n\
-\n\
-            if (typeof value === \"object\" && \"_esdown_await\" in value) {\n\
-\n\
-                if (result.done)\n\
-                    throw new Error(\"Invalid async generator return\");\n\
-\n\
-                return value._esdown_await;\n\
-            }\n\
-\n\
-            return null;\n\
-        }\n\
+        resume(\"next\", void 0);\n\
 \n\
         function resume(type, value) {\n\
 \n\
-            // HACK: If the generator does not support the \"return\" method, then\n\
-            // emulate it (poorly) using throw.  (V8 circa 2015-02-13 does not support\n\
-            // generator.return.)\n\
-            if (type === \"return\" && !(type in iter)) {\n\
-\n\
-                type = \"throw\";\n\
-                value = { value, __return: true };\n\
-            }\n\
-\n\
             try {\n\
 \n\
-                let result = iter[type](value),\n\
-                    awaited = awaitValue(result);\n\
+                let result = iter[type](value);\n\
 \n\
-                if (awaited) {\n\
+                if (result.done) {\n\
 \n\
-                    Promise.resolve(awaited).then(\n\
-                        x => resume(\"next\", x),\n\
-                        x => resume(\"throw\", x));\n\
+                    resolve(result.value);\n\
 \n\
                 } else {\n\
 \n\
                     Promise.resolve(result.value).then(\n\
-                        x => fulfill(result.done ? \"return\" : \"normal\", x),\n\
-                        x => fulfill(\"throw\", x));\n\
+                        x => resume(\"next\", x),\n\
+                        x => resume(\"throw\", x));\n\
                 }\n\
 \n\
-            } catch (x) {\n\
-\n\
-                // HACK: Return-as-throw\n\
-                if (x && x.__return === true)\n\
-                    return fulfill(\"return\", x.value);\n\
-\n\
-                fulfill(\"throw\", x);\n\
-            }\n\
+            } catch (x) { reject(x) }\n\
         }\n\
-    },\n\
+    });\n\
+}\n\
 \n\
-    // Support for spread operations\n\
-    spread(initial) {\n\
+// Support for async generators\n\
+export function asyncGenerator(iter) {\n\
 \n\
-        return {\n\
+    let front = null, back = null;\n\
 \n\
-            a: initial || [],\n\
+    let aIter = {\n\
 \n\
-            // Add items\n\
-            s() {\n\
+        next(val) { return send(\"next\", val) },\n\
+        throw(val) { return send(\"throw\", val) },\n\
+        return(val) { return send(\"return\", val) },\n\
+    };\n\
 \n\
-                for (let i = 0; i < arguments.length; ++i)\n\
-                    this.a.push(arguments[i]);\n\
+    aIter[Symbol.asyncIterator] = function() { return this };\n\
+    return aIter;\n\
 \n\
-                return this;\n\
-            },\n\
+    function send(type, value) {\n\
 \n\
-            // Add the contents of iterables\n\
-            i(list) {\n\
+        return new Promise((resolve, reject) => {\n\
 \n\
-                if (Array.isArray(list)) {\n\
+            let x = { type, value, resolve, reject, next: null };\n\
 \n\
-                    this.a.push.apply(this.a, list);\n\
+            if (back) {\n\
 \n\
-                } else {\n\
+                // If list is not empty, then push onto the end\n\
+                back = back.next = x;\n\
 \n\
-                    for (let item of list)\n\
-                        this.a.push(item);\n\
-                }\n\
+            } else {\n\
 \n\
-                return this;\n\
+                // Create new list and resume generator\n\
+                front = back = x;\n\
+                resume(type, value);\n\
             }\n\
-\n\
-        };\n\
-    },\n\
-\n\
-    // Support for object destructuring\n\
-    objd(obj) {\n\
-\n\
-        return toObject(obj);\n\
-    },\n\
-\n\
-    // Support for array destructuring\n\
-    arrayd(obj) {\n\
-\n\
-        if (Array.isArray(obj)) {\n\
-\n\
-            return {\n\
-\n\
-                at(skip, pos) { return obj[pos] },\n\
-                rest(skip, pos) { return obj.slice(pos) }\n\
-            };\n\
-        }\n\
-\n\
-        let iter = toObject(obj)[Symbol.iterator]();\n\
-\n\
-        return {\n\
-\n\
-            at(skip) {\n\
-\n\
-                let r;\n\
-\n\
-                while (skip--)\n\
-                    r = iter.next();\n\
-\n\
-                return r.value;\n\
-            },\n\
-\n\
-            rest(skip) {\n\
-\n\
-                let a = [], r;\n\
-\n\
-                while (--skip)\n\
-                    r = iter.next();\n\
-\n\
-                while (r = iter.next(), !r.done)\n\
-                    a.push(r.value);\n\
-\n\
-                return a;\n\
-            }\n\
-        };\n\
-    },\n\
-\n\
-    // Support for private fields\n\
-    getPrivate(obj, map, name) {\n\
-\n\
-        let entry = map.get(Object(obj));\n\
-\n\
-        if (!entry)\n\
-            throw new TypeError;\n\
-\n\
-        return entry[name];\n\
-    },\n\
-\n\
-    setPrivate(obj, map, name, value) {\n\
-\n\
-        let entry = map.get(Object(obj));\n\
-\n\
-        if (!entry)\n\
-            throw new TypeError;\n\
-\n\
-        return entry[name] = value;\n\
+        });\n\
     }\n\
 \n\
+    function fulfill(type, value) {\n\
+\n\
+        switch (type) {\n\
+\n\
+            case \"return\":\n\
+                front.resolve({ value, done: true });\n\
+                break;\n\
+\n\
+            case \"throw\":\n\
+                front.reject(value);\n\
+                break;\n\
+\n\
+            default:\n\
+                front.resolve({ value, done: false });\n\
+                break;\n\
+        }\n\
+\n\
+        front = front.next;\n\
+\n\
+        if (front) resume(front.type, front.value);\n\
+        else back = null;\n\
+    }\n\
+\n\
+    function awaitValue(result) {\n\
+\n\
+        let value = result.value;\n\
+\n\
+        if (typeof value === \"object\" && \"_esdown_await\" in value) {\n\
+\n\
+            if (result.done)\n\
+                throw new Error(\"Invalid async generator return\");\n\
+\n\
+            return value._esdown_await;\n\
+        }\n\
+\n\
+        return null;\n\
+    }\n\
+\n\
+    function resume(type, value) {\n\
+\n\
+        // HACK: If the generator does not support the \"return\" method, then\n\
+        // emulate it (poorly) using throw.  (V8 circa 2015-02-13 does not support\n\
+        // generator.return.)\n\
+        if (type === \"return\" && !(type in iter)) {\n\
+\n\
+            type = \"throw\";\n\
+            value = { value, __return: true };\n\
+        }\n\
+\n\
+        try {\n\
+\n\
+            let result = iter[type](value),\n\
+                awaited = awaitValue(result);\n\
+\n\
+            if (awaited) {\n\
+\n\
+                Promise.resolve(awaited).then(\n\
+                    x => resume(\"next\", x),\n\
+                    x => resume(\"throw\", x));\n\
+\n\
+            } else {\n\
+\n\
+                Promise.resolve(result.value).then(\n\
+                    x => fulfill(result.done ? \"return\" : \"normal\", x),\n\
+                    x => fulfill(\"throw\", x));\n\
+            }\n\
+\n\
+        } catch (x) {\n\
+\n\
+            // HACK: Return-as-throw\n\
+            if (x && x.__return === true)\n\
+                return fulfill(\"return\", x.value);\n\
+\n\
+            fulfill(\"throw\", x);\n\
+        }\n\
+    }\n\
+}\n\
+\n\
+// Support for spread operations\n\
+export function spread(initial) {\n\
+\n\
+    return {\n\
+\n\
+        a: initial || [],\n\
+\n\
+        // Add items\n\
+        s() {\n\
+\n\
+            for (let i = 0; i < arguments.length; ++i)\n\
+                this.a.push(arguments[i]);\n\
+\n\
+            return this;\n\
+        },\n\
+\n\
+        // Add the contents of iterables\n\
+        i(list) {\n\
+\n\
+            if (Array.isArray(list)) {\n\
+\n\
+                this.a.push.apply(this.a, list);\n\
+\n\
+            } else {\n\
+\n\
+                for (let item of list)\n\
+                    this.a.push(item);\n\
+            }\n\
+\n\
+            return this;\n\
+        }\n\
+\n\
+    };\n\
+}\n\
+\n\
+// Support for object destructuring\n\
+export function objd(obj) {\n\
+\n\
+    return toObject(obj);\n\
+}\n\
+\n\
+// Support for array destructuring\n\
+export function arrayd(obj) {\n\
+\n\
+    if (Array.isArray(obj)) {\n\
+\n\
+        return {\n\
+\n\
+            at(skip, pos) { return obj[pos] },\n\
+            rest(skip, pos) { return obj.slice(pos) }\n\
+        };\n\
+    }\n\
+\n\
+    let iter = toObject(obj)[Symbol.iterator]();\n\
+\n\
+    return {\n\
+\n\
+        at(skip) {\n\
+\n\
+            let r;\n\
+\n\
+            while (skip--)\n\
+                r = iter.next();\n\
+\n\
+            return r.value;\n\
+        },\n\
+\n\
+        rest(skip) {\n\
+\n\
+            let a = [], r;\n\
+\n\
+            while (--skip)\n\
+                r = iter.next();\n\
+\n\
+            while (r = iter.next(), !r.done)\n\
+                a.push(r.value);\n\
+\n\
+            return a;\n\
+        }\n\
+    };\n\
+}\n\
+\n\
+export {\n\
+    makeClass as class,\n\
+    VERSION as version,\n\
+    GLOBAL as global,\n\
+    asyncFunction as async,\n\
+    asyncGenerator as asyncGen,\n\
 };\n\
 ";
 
@@ -10064,42 +10015,11 @@ InstallFunctions($Promise.prototype, DONT_ENUM, [\n\
 exports.Runtime = Runtime;
 
 
-}).call(this, _M17);
-
-(function(exports) {
-
-var NODE_SCHEME = /^node:/i,
-      URI_SCHEME = /^[a-z]+:/i;
-
-function isLegacyScheme(spec) {
-
-    return NODE_SCHEME.test(spec);
-}
-
-function removeScheme(uri) {
-
-    return uri.replace(URI_SCHEME, "");
-}
-
-function hasScheme(uri) {
-
-    return URI_SCHEME.test(uri);
-}
-
-exports.isLegacyScheme = isLegacyScheme;
-exports.removeScheme = removeScheme;
-exports.hasScheme = hasScheme;
-
-
-}).call(this, _M16);
+})(_M16);
 
 (function(exports) {
 
 var parse = _M9.parse, AST = _M9.AST;
-var isLegacyScheme = _M16.isLegacyScheme, removeScheme = _M16.removeScheme;
-
-var NODE_SCHEME = /^node:/i,
-      URI_SCHEME = /^[a-z]+:/i;
 
 var RESERVED_WORD = new RegExp("^(?:" +
     "break|case|catch|class|const|continue|debugger|default|delete|do|" +
@@ -10243,15 +10163,30 @@ function collapseScopes(parseResult) {
     }
 }
 
-var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Replacer = function() {} });
+function replaceText(input, options) {
 
-    __({ replace: function(input, options) { var __this = this; if (options === void 0) options = {}; 
+    return new Replacer(options).replace(input);
+}
+
+var Replacer = _esdown.class(function(__) { var Replacer;
+
+    __({ constructor: Replacer = function(options) { var __this = this; if (options === void 0) options = {}; 
+
+        this.options = {
+            identifyModule: function(_) { return "_M" + (__this.uid++); },
+            module: false,
+        };
+
+        Object.keys(options).forEach(function(k) { return __this.options[k] = options[k]; });
+    },
+
+    replace: function(input) { var __this = this; 
 
         this.asi = {};
 
         this.parseResult = parse(input, {
 
-            module: options.module,
+            module: this.options.module,
             addParentLinks: true,
             resolveScopes: true,
 
@@ -10266,14 +10201,15 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
 
         var root = this.parseResult.ast;
 
-        collapseScopes(this.parseResult);
-
         this.input = input;
         this.exports = {};
-        this.imports = {};
+        this.moduleNames = {};
         this.dependencies = [];
+        this.runtime = {};
         this.isStrict = false;
         this.uid = 0;
+
+        collapseScopes(this.parseResult);
 
         var visit = function(node) {
 
@@ -10313,25 +10249,7 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
         };
 
         var output = visit(new RootNode(root, input.length)),
-            head = "";
-
-        this.dependencies.forEach(function(dep) {
-
-            if (head) head += ", ";
-            else head = "var ";
-
-            var url = dep.url,
-                legacyFlag = dep.legacy ? ", 1" : "";
-
-            head += "" + (__this.imports[url]) + " = __load(" + (JSON.stringify(dep.url)) + "" + (legacyFlag) + ")";
-        });
-
-        if (head)
-            head += "; ";
-
-        output = head + output;
-
-        var exports = Object.keys(this.exports);
+            exports = Object.keys(this.exports);
 
         if (exports.length > 0) {
 
@@ -10340,7 +10258,12 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
             output += "\n";
         }
 
-        return output;
+        return {
+            input: input,
+            output: output,
+            imports: this.dependencies,
+            runtime: Object.keys(this.runtime),
+        };
     },
 
     DoWhileStatement: function(node) {
@@ -10433,7 +10356,7 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
 
     Module: function(node) {
 
-        // NOTE: Strict directive is included with module wrapper
+        // Strict directive is included with module wrapper
 
         var inserted = [],
             temps = this.tempVars(node);
@@ -10518,6 +10441,8 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
                 if (computed$0)
                     c.text = "}, " + (c.name.expression.text) + ", { " + (c.text) + "";
             });
+
+            this.markRuntime("computed");
 
             return "_esdown.computed(" + this.stringify(node) + ")";
         }
@@ -10644,6 +10569,7 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
                 } else {
 
                     ident = decl.pattern.text;
+
                     exports[ident] = ident;
                 }
             });
@@ -10772,6 +10698,9 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
 
     SuperKeyword: function(node) {
 
+        if (this.skip("classes"))
+            return;
+
         var proto = "__.super",
             p = node.parent,
             elem = p;
@@ -10809,10 +10738,6 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
 
             return node.object.text + prop$0;
         }
-
-        // TODO:  What about super.@x?
-        if (node.property.type === "AtName")
-            return this.privateReference(node, node.object.text, node.property.text);
     },
 
     PipeExpression: function(node) {
@@ -10880,6 +10805,8 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
 
     YieldExpression: function(node) {
 
+        // TODO:  Can we drop these?
+
         // V8 circa Node 0.11.x does not support yield without expression
         if (!node.expression)
             return "yield void 0";
@@ -10910,6 +10837,8 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
         if (node.base)
             this.fail("Subclassing not supported", node.base);
 
+        this.markRuntime("classes");
+
         return "var " + node.identifier.text + " = _esdown.class(" +
             (node.base ? (node.base.text + ", ") : "") +
             "function(__) {" +
@@ -10931,6 +10860,8 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
             after = "; return " + node.identifier.text + "; }()";
         }
 
+        this.markRuntime("classes");
+
         return "(" + before +
             "_esdown.class(" +
             (node.base ? (node.base.text + ", ") : "") +
@@ -10940,74 +10871,7 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
             after + ")";
     },
 
-    PrivateDeclaration: function(node) {
-
-        var init = node.initializer;
-
-        if (node.static)
-            return "__private_ctor." + node.name.text + " = " + (init ? init.text : "void 0") + ";";
-
-        if (init) {
-
-            node.parent.privateNames[node.name.text].init = true;
-            return "function __init_" + node.name.text + "() { return " + init.text + "; }";
-        }
-
-        return "";
-    },
-
-    AtName: function(node) {
-
-        var name = node.value.slice(1),
-            parent = node.parent;
-
-        switch (parent.type) {
-
-            case "MemberExpression":
-                if (parent.property === node)
-                    return name;
-
-                break;
-
-            case "PrivateDeclaration":
-            case "MethodDefinition":
-            case "PropertyDefinition":
-                return name;
-        }
-    },
-
-    ClassBodyBegin: function(node) { var __this = this; 
-
-        var ctor = null;
-
-        node.elements.forEach(function(e) {
-
-            switch (e.type) {
-
-                case "MethodDefinition":
-
-                    if (e.name.type === "AtName")
-                        __this.addPrivateName(node, e.name.value.slice(1), true, e.static);
-
-                    if (e.kind === "constructor")
-                        ctor = e;
-
-                    break;
-
-                case "PrivateDeclaration":
-
-                    if (e.name.type === "AtName")
-                        __this.addPrivateName(node, e.name.value.slice(1), false, e.static);
-
-                    break;
-            }
-        });
-
-        if (ctor && node.privateNames)
-            ctor.initPrivate = true;
-    },
-
-    ClassBody: function(node) {
+    ClassBody: function(node) { var __this = this; 
 
         var classIdent = node.parent.identifier,
             hasBase = !!node.parent.base,
@@ -11026,9 +10890,7 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
                 fn = "__",
                 target = "";
 
-            if (e.name.type === "AtName")
-                target = e.static ? "__private_ctor" : "__private_proto";
-            else if (e.static)
+            if (e.static)
                 fn += ".static";
 
             if (e.static)
@@ -11046,6 +10908,8 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
             var prefix = fn + "(" + (target ? target + ", " : "");
 
             if (e.name.type === "ComputedPropertyName") {
+
+                __this.markRuntime("computed");
 
                 e.text = prefix + "_esdown.computed({}, " + e.name.expression.text + ", { " + text + " }));";
                 prefix = "";
@@ -11067,12 +10931,6 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
 
         header.push("var " + ctorName + ";");
 
-        if (node.privateNames) {
-
-            header.push(this.privateInit(node));
-            footer.push("__private_static" + node.privateID + ".set(" + ctorName + ", __private_ctor);");
-        }
-
         // Add a default constructor if none was provided
         if (!hasCtor) {
 
@@ -11080,12 +10938,6 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
 
             if (hasBase)
                 ctorBody$0 = "__.csuper.apply(this, arguments);";
-
-            if (node.privateNames) {
-
-                if (ctorBody$0) ctorBody$0 = " " + ctorBody$0;
-                ctorBody$0 += "__initPrivate(this);";
-            }
 
             if (ctorBody$0)
                 ctorBody$0 = " " + ctorBody$0 + " ";
@@ -11119,20 +10971,23 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
 
         if (node.parent.type === "TaggedTemplateExpression") {
 
-            out = "(_esdown.callSite(" +
-                "[" + lit.map(function(x) { return __this.rawToString(x.raw); }).join(", ") + "]";
+            this.markRuntime("templates");
+
+            var temp$1 = this.addTempVar(node),
+                raw$0 = temp$1;
 
             // Only output the raw array if it is different from the cooked array
             for (var i$0 = 0; i$0 < lit.length; ++i$0) {
 
                 if (lit[i$0].raw !== lit[i$0].value) {
 
-                    out += ", [" + lit.map(function(x) { return JSON.stringify(x.raw); }).join(", ") + "]";
+                    raw$0 = "[" + (lit.map(function(x) { return JSON.stringify(x.raw); }).join(", ")) + "]";
                     break;
                 }
             }
 
-            out += ")";
+            out = "((" + (temp$1) + " = [" + (lit.map(function(x) { return __this.rawToString(x.raw); }).join(", ")) + "]";
+            out += ", " + (temp$1) + ".raw = " + (raw$0) + ", " + (temp$1) + ")";
 
             if (sub.length > 0)
                 out += ", " + sub.map(function(x) { return x.text; }).join(", ");
@@ -11156,7 +11011,7 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
     CatchClause: function(node) {
 
         if (!this.isPattern(node.param))
-            return null;
+            return;
 
         var temp = this.addTempVar(node, null, true),
             assign = this.translatePattern(node.param, temp).join(", "),
@@ -11168,7 +11023,7 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
     VariableDeclarator: function(node) {
 
         if (!node.initializer || !this.isPattern(node.pattern))
-            return null;
+            return;
 
         var list = this.translatePattern(node.pattern, node.initializer.text);
 
@@ -11183,7 +11038,7 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
         var left = this.unwrapParens(node.left);
 
         if (!this.isPattern(left))
-            return null;
+            return;
 
         var temp = this.addTempVar(node),
             list = this.translatePattern(left, temp);
@@ -11246,6 +11101,8 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
         if (last < elems.length - 1)
             list.push({ type: "s", args: this.joinList(elems.slice(last + 1)) });
 
+        this.markRuntime("spread");
+
         var out = "(_esdown.spread(" + (initial || "") + ")";
 
         for (var i$3 = 0; i$3 < list.length; ++i$3)
@@ -11268,6 +11125,8 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
             targets = [];
 
         node.patternTargets = targets;
+
+        this.markRuntime("destructuring");
 
         var visit = function(tree, base) {
 
@@ -11406,122 +11265,16 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
         if (body === void 0)
             body = node.body.text;
 
+        this.markRuntime(wrapper === "asyncGen" ? "async-generators" : "async-functions");
+
         return "" + (head) + "(" + (outerParams) + ") { " +
             "return _esdown." + (wrapper) + "(function*(" + (this.joinList(node.params)) + ") " +
             "" + (body) + ".apply(this, arguments)); }";
     },
 
-    findPrivateName: function(node, name) {
+    markRuntime: function(name) {
 
-        for (var n$0 = node; n$0; n$0 = n$0.parent) {
-
-            var names$0 = n$0.privateNames;
-
-            if (names$0 && names$0[name])
-                return names$0[name];
-        }
-
-        this.fail("Unable to find private name @" + name, node);
-    },
-
-    addPrivateName: function(scope, ident, isMethod, isStatic) {
-
-        var privateID = scope.privateID;
-
-        if (privateID === void 0) {
-
-            privateID = scope.privateID = this.uid++;
-            scope.privateNames = Object.create(null);
-        }
-
-        scope.privateNames[ident] = {
-            ident: ident,
-            init: null,
-            method: isMethod,
-            static: isStatic,
-            map: "__private" + (isStatic ? "_static" : "") + privateID
-        };
-    },
-
-    privateReference: function(node, obj, prop) {
-
-        var pp = this.parenParent(node),
-            p = pp[0],
-            mapName = this.findPrivateName(p, prop).map,
-            type = "get";
-
-        switch (p.type) {
-
-            case "CallExpression":
-                if (p.callee === pp[1]) type = "call";
-                break;
-
-            case "AssignmentExpression":
-                if (p.left === pp[1]) type = "set";
-                break;
-
-            case "PatternProperty":
-            case "PatternElement":
-                // References within assignment patterns are not currently supported
-                return null;
-
-            case "UnaryExpression":
-                if (p.operator === "delete")
-                    this.fail("Cannot delete private reference", p.expression);
-
-                break;
-        }
-
-        var temp;
-
-        switch (type) {
-
-            case "call":
-                temp = this.addTempVar(p);
-                p.injectThisArg = temp;
-                return "_esdown.getPrivate(" + (temp) + " = " + (obj) + ", " + (mapName) + ", \"" + (prop) + "\")";
-
-            case "get":
-                return "_esdown.getPrivate(" + (obj) + ", " + (mapName) + ", \"" + (prop) + "\")";
-
-            case "set":
-                temp = this.addTempVar(p);
-
-                p.assignWrap = [
-                    "(_esdown.setPrivate(" + (obj) + ", " + (mapName) + ", \"" + (prop) + "\", " + (temp) + " = ",
-                    "), " + (temp) + ")"
-                ];
-
-                return null;
-        }
-    },
-
-    privateInit: function(scope) {
-
-        var id = scope.privateID;
-
-        var instance = Object
-            .keys(scope.privateNames)
-            .filter(function(name) {
-                var entry = scope.privateNames[name];
-                return !entry.method && !entry.static;
-            });
-
-        return "var __private" + id + " = new WeakMap, " +
-            "__private_static" + id + " = new WeakMap, " +
-            "__private_ctor = {}, " +
-            "__private_proto = {}; " +
-        "function __initPrivate(__$) { " +
-            "if (__private" + id + ".has(__$)) " +
-                "throw new TypeError('Object already initialized'); " +
-            "var __p; " +
-            "__private" + id + ".set(__$, __p = Object.create(__private_proto, { " +
-                instance.map(function(name) { return name + ": { writable: true }"; }).join(", ") +
-            " })); " +
-            instance
-                .filter(function(name) { return scope.privateNames[name].init; })
-                .map(function(name) { return "__p." + name + " = __init_" + name + "(); "; }).join("") +
-        "}";
+        this.runtime[name] = true;
     },
 
     rawToString: function(raw) {
@@ -11596,30 +11349,22 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
 
     modulePath: function(node) {
 
-        return node.type === "StringLiteral" ?
-            this.identifyModule(node.value) :
-            this.stringify(node);
-    },
+        if (node.type !== "StringLiteral")
+            return this.stringify(node);
 
-    identifyModule: function(url) {
-
-        var legacy = false;
+        var url = node.value,
+            legacy = false;
 
         url = url.trim();
 
-        if (isLegacyScheme(url)) {
+        if (typeof this.moduleNames[url] !== "string") {
 
-            url = removeScheme(url).trim();
-            legacy = true;
+            var identifier$0 = this.options.identifyModule(url);
+            this.moduleNames[url] = identifier$0;
+            this.dependencies.push({ url: url, identifier: identifier$0 });
         }
 
-        if (typeof this.imports[url] !== "string") {
-
-            this.imports[url] = "_M" + (this.uid++);
-            this.dependencies.push({ url: url, legacy: legacy });
-        }
-
-        return this.imports[url];
+        return this.moduleNames[url];
     },
 
     stringify: function(node) {
@@ -11664,9 +11409,6 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
 
         if (node.lexicalVars)
             inserted.push(this.lexicalVarNames(node));
-
-        if (node.initPrivate)
-            inserted.push("__initPrivate(this);");
 
         if (node.createRestBinding)
             inserted.push(this.restParamVar(node));
@@ -11803,50 +11545,72 @@ var Replacer = _esdown.class(function(__) { var Replacer; __({ constructor: Repl
 
  });
 
-exports.Replacer = Replacer;
+exports.replaceText = replaceText;
 
 
-}).call(this, _M15);
+})(_M17);
 
 (function(exports) {
 
-var Runtime = _M17.Runtime;
-var Replacer = _M15.Replacer;
+var NODE_SCHEME = /^node:/i,
+      URI_SCHEME = /^[a-z]+:/i;
+
+function isLegacyScheme(spec) {
+
+    return NODE_SCHEME.test(spec);
+}
+
+function removeScheme(uri) {
+
+    return uri.replace(URI_SCHEME, "");
+}
+
+function hasScheme(uri) {
+
+    return URI_SCHEME.test(uri);
+}
+
+exports.isLegacyScheme = isLegacyScheme;
+exports.removeScheme = removeScheme;
+exports.hasScheme = hasScheme;
+
+
+})(_M15);
+
+(function(exports) {
+
+var Runtime = _M16.Runtime;
+var replaceText = _M17.replaceText;
+var isLegacyScheme = _M15.isLegacyScheme, removeScheme = _M15.removeScheme;
 
 var SIGNATURE = "/*=esdown=*/";
 
-var WRAP_CALLEE = "(function(fn, deps, name) { " +
-
-    "function obj() { return {} } " +
+var WRAP_CALLEE = "(function(fn, name) { " +
 
     // CommonJS:
     "if (typeof exports !== 'undefined') " +
         "fn(require, exports, module); " +
 
-    // AMD:
-    "else if (typeof define === 'function' && define.amd) " +
-        "define(['require', 'exports', 'module'].concat(deps), fn); " +
-
     // DOM global module:
-    "else if (typeof self !== 'undefined' && name) " +
-        "fn(obj, name === '*' ? self : (self[name] = {}), {}); " +
-
-    // Hail Mary:
-    "else " +
-        "fn(obj, {}, {}); " +
+    "else if (typeof self !== 'undefined') " +
+        "fn(function() { return {} }, name === '*' ? self : (self[name] = {}), {}); " +
 
 "})";
 
-var WRAP_HEADER = "function(require, exports, module) { " +
-    "'use strict'; " +
-    "function __load(p, l) { " +
-        "module.__es6 = !l; " +
-        "var e = require(p); " +
-        "if (e && e.constructor !== Object) e.default = e; " +
-        "return e; " +
-    "} ";
+var MODULE_IMPORT_RUNTIME =
+"function __load(p, l) { " +
+    "module.__es6 = !l; " +
+    "var e = require(p); " +
+    "if (e && e.constructor !== Object) " +
+        "e = Object.create(e, { 'default': { value: e } }); " +
+    "return e; " +
+"} ";
 
-var WRAP_FOOTER = "\n\n}";
+var MODULE_IMPORT =
+"function __import(e) { " +
+    "return !e || e.constructor === Object ? e : " +
+        "Object.create(e, { 'default': { value: e } }); " +
+"} ";
 
 function sanitize(text) {
 
@@ -11860,28 +11624,22 @@ function sanitize(text) {
     return text;
 }
 
-function wrapRuntimeModules() {
+function wrapRuntime() {
 
-    return Object.keys(Runtime).map(function(key) {
+    var text = replaceText(Runtime.API, { module: true }).output;
 
-        return "(function() {\n\n" + Runtime[key] + "\n\n}).call(this);\n\n";
-
-    }).join("");
+    // Wrap runtime library in an IIFE, exporting into the _esdown variable
+    return "var _esdown = {}; (function(exports) {\n\n" + text + "\n\n})(_esdown);";
 }
 
-function wrapRuntimeAPI() {
+function wrapPolyfills() {
 
-    return "var _esdown; (function() {\n\n" + Runtime.API + "\n\n}).call(this);\n\n";
-}
+    return Object.keys(Runtime).filter(function(key) { return key !== "API"; }).map(function(key) {
 
-function wrapPolyfillModules() {
+        var text = replaceText(Runtime[key]).output;
 
-    return Object.keys(Runtime).map(function(key) {
-
-        if (key === "API")
-            return "_esdown.global._esdown = _esdown;\n\n";
-
-        return "(function() {\n\n" + Runtime[key] + "\n\n}).call(this);\n\n";
+        // Wrap each polyfill module in an IIFE
+        return "(function() {\n\n" + text + "\n\n})();\n\n";
 
     }).join("");
 }
@@ -11890,51 +11648,84 @@ function translate(input, options) { if (options === void 0) options = {};
 
     input = sanitize(input);
 
-    var prefix = "";
-
-    if (options.runtime) {
-
-        prefix = "\n" + wrapRuntimeAPI();
-
-        if (options.polyfill)
-            prefix += "\n" + wrapPolyfillModules();
-    }
-
-    input = prefix + input;
-
     // Node modules are wrapped inside of a function expression, which allows
     // return statements
     if (options.functionContext)
         input = "(function(){" + input + "})";
 
-    var replacer = options.replacer || new Replacer,
-        output = replacer.replace(input, { module: options.module });
+    var result = replaceText(input, options),
+        output = result.output,
+        imports = result.imports;
 
     // Remove function expression wrapper for node-modules
     if (options.functionContext)
         output = output.slice(12, -2);
 
+    // Add esdown-runtime dependency if runtime features are used
+    if (!options.runtimeImports && result.runtime.length > 0)
+        imports.push({ url: "esdown-runtime", identifier: "_esdown" });
+
     if (options.wrap) {
 
-        // Doesn't make sense to create a module wrapper for a non-module
+        // It doesn't make sense to create a module wrapper for a non-module
         if (!options.module)
             throw new Error("Cannot wrap a non-module");
 
-        output = wrapModule(
-            output,
-            replacer.dependencies.map(function(d) { return d.url; }),
-            options.global);
+        output = wrapModule(output, imports, options);
+    }
+
+    if (options.result) {
+
+        var r$0 = options.result;
+        r$0.input = input;
+        r$0.output = output;
+        r$0.imports = imports;
+        r$0.runtime = result.runtime;
     }
 
     return output;
 }
 
-function wrapModule(text, dep, global) {
+function wrapModule(text, imports, options) { if (imports === void 0) imports = []; if (options === void 0) options = {}; 
+
+    var header = "'use strict'; ";
+
+    if (imports.length > 0)
+        header += options.runtimeImports ? MODULE_IMPORT_RUNTIME : MODULE_IMPORT;
+
+    var requires = imports.map(function(dep) {
+
+        var url = dep.url,
+            legacy = isLegacyScheme(url),
+            ident = dep.identifier;
+
+        if (legacy)
+            url = removeScheme(url);
+
+        if (options.runtimeImports) {
+
+            var flag$0 = legacy ? "1" : "0";
+            return "" + (ident) + " = __load(" + (JSON.stringify(url)) + ", " + (flag$0) + ")";
+        }
+
+        return "" + (ident) + " = __import(require(" + (JSON.stringify(url)) + "))";
+    });
+
+    if (requires.length > 0)
+        header += "var " + requires.join(", ") + "; ";
+
+    if (options.runtime)
+        header += wrapRuntime() + "\n\n";
+
+    if (options.polyfill)
+        header += wrapPolyfills() + "\n\n";
+
+    if (!options.global)
+        return SIGNATURE + header + text;
 
     return SIGNATURE + WRAP_CALLEE + "(" +
-        WRAP_HEADER + text + WRAP_FOOTER + ", " +
-        JSON.stringify(dep) + ", " +
-        JSON.stringify(global || "") +
+        "function(require, exports, module) { " + header + text + "\n\n}, " +
+        JSON.stringify(options.global) +
     ");";
 }
 
@@ -11948,7 +11739,7 @@ exports.wrapModule = wrapModule;
 exports.isWrapped = isWrapped;
 
 
-}).call(this, _M8);
+})(_M8);
 
 (function(exports) {
 
@@ -12010,8 +11801,13 @@ function locateModule(path, base) {
 
     path = Path.resolve(base, path);
 
-    if (isDirectory(path))
-        return getFolderEntry(path);
+    if (isDirectory(path)) {
+
+        var pathInfo$0 = getFolderEntry(path);
+        
+        if (pathInfo$0)
+            return pathInfo$0;
+    }
 
     return { path: path };
 }
@@ -12052,7 +11848,7 @@ exports.isPackageSpecifier = isPackageSpecifier;
 exports.locatePackage = locatePackage;
 
 
-}).call(this, _M14);
+})(_M14);
 
 (function(exports) {
 
@@ -12097,6 +11893,10 @@ function formatSyntaxError(e, filename) {
 function addExtension() {
 
     var moduleLoad = Module._load;
+
+    // Create _esdown global variable so that it doesn't need to be bundled into
+    // each module
+    global._esdown = _esdown;
 
     Module.prototype.importSync = function(path) {
 
@@ -12145,7 +11945,12 @@ function addExtension() {
             // via import syntax
             var m$0 = !!module.parent.__es6;
 
-            text = translate(text, { wrap: m$0, module: m$0, functionContext: !m$0 });
+            text = translate(text, {
+                wrap: m$0,
+                module: m$0,
+                functionContext: !m$0,
+                runtimeImports: true,
+            });
 
         } catch (e) {
 
@@ -12168,14 +11973,15 @@ function runModule(path) {
 
     var loc = locateModule(path, process.cwd());
 
-    // "__load" is defined in the module wrapper and ensures that the
-    // target is loaded as a module
+    module.__es6 = true;
+    var m = require(loc.path);
 
-    var m = __load(loc.path);
+    if (m && m.constructor !== Object)
+        m = Object.create(m, { "default": { value: m } });
 
     if (m && typeof m.main === "function") {
 
-        var result$0 = m.main(process.argv);
+        var result$0 = m.main();
         Promise.resolve(result$0).then(null, function(x) { return setTimeout(function($) { throw x }, 0); });
     }
 }
@@ -12406,7 +12212,7 @@ exports.runModule = runModule;
 exports.startREPL = startREPL;
 
 
-}).call(this, _M6);
+})(_M6);
 
 (function(exports) {
 
@@ -12414,8 +12220,7 @@ var Path = _M3;
 var readFile = _M5.readFile, writeFile = _M5.writeFile;
 var isPackageSpecifier = _M14.isPackageSpecifier, locateModule = _M14.locateModule;
 var translate = _M8.translate, wrapModule = _M8.wrapModule;
-var Replacer = _M15.Replacer;
-var isLegacyScheme = _M16.isLegacyScheme, removeScheme = _M16.removeScheme, hasScheme = _M16.hasScheme;
+var isLegacyScheme = _M15.isLegacyScheme, removeScheme = _M15.removeScheme, hasScheme = _M15.hasScheme;
 
 
 var Node = _esdown.class(function(__) { var Node;
@@ -12426,6 +12231,7 @@ var Node = _esdown.class(function(__) { var Node;
         this.name = name;
         this.edges = new Set;
         this.output = null;
+        this.runtime = false;
     }});
  });
 
@@ -12486,18 +12292,23 @@ var GraphBuilder = _esdown.class(function(__) { var GraphBuilder;
         if (node.output !== null)
             throw new Error("Node already processed");
 
-        var replacer = new Replacer,
-            dir = Path.dirname(node.path);
+        var dir = Path.dirname(node.path),
+            result = {};
 
-        replacer.identifyModule = function(path) {
+        var identifyModule = function(path) {
 
-            // REVISIT:  Does not currently allow bundling of legacy modules
             path = locateModule(path, dir).path;
             node.edges.add(path);
             return __this.add(path).name;
         };
 
-        node.output = translate(input, { replacer: replacer, module: true });
+        node.output = translate(input, {
+            identifyModule: identifyModule,
+            module: true,
+            result: result
+        });
+
+        node.runtime = result.runtime.length > 0;
 
         return node;
     }});
@@ -12558,54 +12369,37 @@ function bundle(rootPath, options) { if (options === void 0) options = {};
     return allFetched.then(function($) {
 
         var nodes = builder.sort(),
-            dependencies = [],
+            needsRuntime = options.polyfill,
+            imports = [],
+            varList = [],
             output = "";
 
-        var varList = nodes.map(function(node) {
+        nodes.forEach(function(node) {
 
-            if (node.output === null) {
+            if (node.output === null)
+                imports.push({ url: node.path, identifier: node.name });
+            else
+                varList.push("" + (node.name) + " = " + (node.path === rootPath ? "exports" : "{}") + "");
 
-                var path$0 = node.path,
-                    legacy$0 = "";
+            if (node.runtime)
+                needsRuntime = true;
+        });
 
-                if (isLegacyScheme(path$0)) {
-
-                    path$0 = removeScheme(node.path);
-                    legacy$0 = ", 1";
-                }
-
-                dependencies.push(path$0);
-
-                return "" + (node.name) + " = __load(" + (JSON.stringify(path$0)) + "" + (legacy$0) + ")";
-            }
-
-            return "" + (node.name) + " = " + (node.path === rootPath ? "exports" : "{}") + "";
-
-        }).join(", ");
-
-        if (varList)
-            output += "var " + varList + ";\n";
+        if (varList.length > 0)
+            output += "var " + varList.join(",") + ";\n";
 
         nodes.filter(function(n) { return n.output !== null; }).forEach(function(node) {
 
-            output +=
-                "\n(function(exports) {\n\n" +
-                node.output +
-                "\n\n}).call(this, " + node.name + ");\n";
+            output += "\n(function(exports) {\n\n" + node.output +
+                "\n\n})(" + node.name + ");\n";
         });
 
-        if (options.runtime || options.polyfill) {
-
-            output = translate("", {
-
-                runtime: options.runtime,
-                polyfill: options.polyfill,
-                module: true,
-
-            }) + "\n\n" + output;
-        }
-
-        output = wrapModule(output, dependencies, options.global);
+        output = wrapModule(output, imports, {
+            
+            global: options.global,
+            runtime: needsRuntime,
+            polyfill: options.polyfill,
+        });
 
         if (options.output)
             return writeFile(Path.resolve(options.output), output, "utf8").then(function(_) { return ""; });
@@ -12617,7 +12411,7 @@ function bundle(rootPath, options) { if (options === void 0) options = {};
 exports.bundle = bundle;
 
 
-}).call(this, _M7);
+})(_M7);
 
 (function(exports) {
 
@@ -12631,6 +12425,36 @@ var translate = _M8.translate;
 
 
 
+
+var HELP = "\n\
+Start a REPL by running it without any arguments:\n\
+\n\
+    esdown\n\
+\n\
+Execute a module by adding a path:\n\
+\n\
+    esdown main.js\n\
+\n\
+Translate a module by using a hyphen:\n\
+\n\
+    esdown - [input] [output] [options]\n\
+\n\
+    --input, -i  (1)    The file to translate.\n\
+    --output, -o (2)    The file to write to. If not set, then the output\n\
+                        will be written to the console.\n\
+    --bundle, -b        If present, module dependencies will be bundled\n\
+                        together in the output.\n\
+    --runtime, -r       If present, the esdown runtime code will be bundled\n\
+                        with the output.\n\
+    --polyfill, -p      If present, ES6 polyfills will be bundled with the\n\
+                        output.\n\
+    -R                  If present, the esdown runtime and ES6 polyfills will\n\
+                        be bundled with the output.  Equivalent to including\n\
+                        both the -p and -r options.\n\
+    --global, -g        If specified, the name of the global variable to\n\
+                        dump this module's exports into, if the resulting\n\
+                        script is not executed within any module system.\n\
+";
 
 function getOutPath(inPath, outPath) {
 
@@ -12646,7 +12470,7 @@ function getOutPath(inPath, outPath) {
     return outPath;
 }
 
-function main() {
+function main(args) {
 
     new ConsoleCommand({
 
@@ -12656,6 +12480,13 @@ function main() {
 
             if (input) runModule(input);
             else startREPL();
+        }
+
+    }).add("?", {
+
+        execute: function() {
+
+            console.log(HELP);
         }
 
     }).add("-", {
@@ -12682,6 +12513,8 @@ function main() {
 
             "runtime": { short: "r", flag: true },
 
+            "fullRuntime": { short: "R", flag: true },
+
             "polyfill": { short: "p", flag: true },
 
             "nowrap": { flag: true },
@@ -12696,8 +12529,7 @@ function main() {
                 promise = bundle(params.input, {
 
                     global: params.global,
-                    runtime: params.runtime,
-                    polyfill: params.polyfill,
+                    polyfill: params.fullRuntime || params.polyfill,
                 });
 
             } else {
@@ -12711,8 +12543,8 @@ function main() {
                     return translate(text, {
 
                         global: params.global,
-                        runtime: params.runtime,
-                        polyfill: params.polyfill,
+                        runtime: params.fullRuntime || params.runtime,
+                        polyfill: params.fullRuntime || params.polyfill,
                         wrap: !params.nowrap,
                         module: true,
                     });
@@ -12748,7 +12580,7 @@ function main() {
             });
         }
 
-    }).run();
+    }).run(args || process.argv.slice(2));
 }
 
 exports.translate = translate;
@@ -12757,7 +12589,7 @@ exports.parse = _M9.parse;
 exports.main = main;
 
 
-}).call(this, _M1);
+})(_M1);
 
 
-}, ["fs","path","repl","vm","util"], "esdown");
+}, "esdown");
