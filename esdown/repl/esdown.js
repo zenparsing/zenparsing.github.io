@@ -1,6 +1,6 @@
-/*=esdown=*/(function(fn, name) { if (typeof exports !== 'undefined') fn(require, exports, module); else if (typeof self !== 'undefined') fn(function() { return {} }, name === '*' ? self : (self[name] = {}), {}); })(function(require, exports, module) { 'use strict'; function __import(e) { return !e || e.constructor === Object ? e : Object.create(e, { 'default': { value: e } }); } var _M2 = __import(require("fs")), _M3 = __import(require("path")), _M11 = __import(require("repl")), _M12 = __import(require("vm")), _M13 = __import(require("util")); var _esdown = {}; (function(exports) {
+/*=esdown=*/(function(fn, name) { if (typeof exports !== 'undefined') fn(require, exports, module); else if (typeof self !== 'undefined') fn(void 0, name === '*' ? self : (name ? self[name] = {} : {})); })(function(require, exports, module) { 'use strict'; var _esdown = {}; (function(exports) {
 
-var VERSION = "0.9.13";
+var VERSION = "0.9.16";
 
 var GLOBAL = (function() {
 
@@ -9,9 +9,14 @@ var GLOBAL = (function() {
     return null;
 })();
 
+var ownNames = Object.getOwnPropertyNames,
+      ownSymbols = Object.getOwnPropertySymbols,
+      getDesc = Object.getOwnPropertyDescriptor,
+      defineProp = Object.defineProperty;
+
 function toObject(val) {
 
-    if (val == null)
+    if (val == null) // null or undefined
         throw new TypeError(val + " is not an object");
 
     return Object(val);
@@ -20,26 +25,12 @@ function toObject(val) {
 // Iterates over the descriptors for each own property of an object
 function forEachDesc(obj, fn) {
 
-    var names = Object.getOwnPropertyNames(obj);
-
-    for (var i$0 = 0; i$0 < names.length; ++i$0)
-        fn(names[i$0], Object.getOwnPropertyDescriptor(obj, names[i$0]));
-
-    var getSymbols = Object.getOwnPropertySymbols;
-
-    if (getSymbols) {
-
-        names = getSymbols(obj);
-
-        for (var i$1 = 0; i$1 < names.length; ++i$1)
-            fn(names[i$1], Object.getOwnPropertyDescriptor(obj, names[i$1]));
-    }
-
-    return obj;
+    ownNames(obj).forEach(function(name) { return fn(name, getDesc(obj, name)); });
+    if (ownSymbols) ownSymbols(obj).forEach(function(name) { return fn(name, getDesc(obj, name)); });
 }
 
 // Installs a property into an object, merging "get" and "set" functions
-function mergeProperty(target, name, desc, enumerable) {
+function mergeProp(target, name, desc, enumerable) {
 
     if (desc.get || desc.set) {
 
@@ -50,73 +41,30 @@ function mergeProperty(target, name, desc, enumerable) {
     }
 
     desc.enumerable = enumerable;
-    Object.defineProperty(target, name, desc);
+    defineProp(target, name, desc);
 }
 
 // Installs properties on an object, merging "get" and "set" functions
-function mergeProperties(target, source, enumerable) {
+function mergeProps(target, source, enumerable) {
 
-    forEachDesc(source, function(name, desc) { return mergeProperty(target, name, desc, enumerable); });
+    forEachDesc(source, function(name, desc) { return mergeProp(target, name, desc, enumerable); });
 }
 
 // Builds a class
-function makeClass(base, def) {
+function makeClass(def) {
 
-    var parent;
-
-    if (def === void 0) {
-
-        // If no base class is specified, then Object.prototype
-        // is the parent prototype
-        def = base;
-        base = null;
-        parent = Object.prototype;
-
-    } else if (base === null) {
-
-        // If the base is null, then then then the parent prototype is null
-        parent = null;
-
-    } else if (typeof base === "function") {
-
-        parent = base.prototype;
-
-        // Prototype must be null or an object
-        if (parent !== null && Object(parent) !== parent)
-            parent = void 0;
-    }
-
-    if (parent === void 0)
-        throw new TypeError;
-
-    // Create the prototype object
-    var proto = Object.create(parent),
+    var parent = Object.prototype,
+        proto = Object.create(parent),
         statics = {};
 
-    function __(target, obj) {
-
-        if (!obj) mergeProperties(proto, target, false);
-        else mergeProperties(target, obj, false);
-    }
-
-    __.static = function(obj) { return mergeProperties(statics, obj, false); };
-    __.super = parent;
-    __.csuper = base || Function.prototype;
-
-    // Generate method collections, closing over super bindings
-    def(__);
+    def(function(obj) { return mergeProps(proto, obj, false); },
+        function(obj) { return mergeProps(statics, obj, false); });
 
     var ctor = proto.constructor;
-
-    // Set constructor's prototype
     ctor.prototype = proto;
 
     // Set class "static" methods
-    forEachDesc(statics, function(name, desc) { return Object.defineProperty(ctor, name, desc); });
-
-    // Inherit from base constructor
-    if (base && ctor.__proto__)
-        Object.setPrototypeOf(ctor, base);
+    forEachDesc(statics, function(name, desc) { return defineProp(ctor, name, desc); });
 
     return ctor;
 }
@@ -124,13 +72,13 @@ function makeClass(base, def) {
 // Support for computed property names
 function computed(target) {
 
-    for (var i$2 = 1; i$2 < arguments.length; i$2 += 3) {
+    for (var i$0 = 1; i$0 < arguments.length; i$0 += 3) {
 
-        var desc$0 = Object.getOwnPropertyDescriptor(arguments[i$2 + 1], "_");
-        mergeProperty(target, arguments[i$2], desc$0, true);
+        var desc$0 = getDesc(arguments[i$0 + 1], "_");
+        mergeProp(target, arguments[i$0], desc$0, true);
 
-        if (i$2 + 2 < arguments.length)
-            mergeProperties(target, arguments[i$2 + 2], true);
+        if (i$0 + 2 < arguments.length)
+            mergeProps(target, arguments[i$0 + 2], true);
     }
 
     return target;
@@ -288,8 +236,8 @@ function spread(initial) {
         // Add items
         s: function() {
 
-            for (var i$3 = 0; i$3 < arguments.length; ++i$3)
-                this.a.push(arguments[i$3]);
+            for (var i$1 = 0; i$1 < arguments.length; ++i$1)
+                this.a.push(arguments[i$1]);
 
             return this;
         },
@@ -308,7 +256,7 @@ function spread(initial) {
             }
 
             return this;
-        }
+        },
 
     };
 }
@@ -327,7 +275,7 @@ function arrayd(obj) {
         return {
 
             at: function(skip, pos) { return obj[pos] },
-            rest: function(skip, pos) { return obj.slice(pos) }
+            rest: function(skip, pos) { return obj.slice(pos) },
         };
     }
 
@@ -356,7 +304,7 @@ function arrayd(obj) {
                 a.push(r.value);
 
             return a;
-        }
+        },
     };
 }
 
@@ -384,46 +332,44 @@ exports.asyncGen = asyncGenerator;
 
 })(_esdown);
 
-(function() {
+(function() { var exports = {};
 
-// === Polyfill Utilities ===
+/*=esdown=*/(function(fn, name) { if (typeof exports !== 'undefined') fn(require, exports, module); else if (typeof self !== 'undefined') fn(null, name === '*' ? self : (name ? self[name] = {} : {})); })(function(require, exports, module) { 'use strict'; var _M3 = {}, _M4 = {}, _M5 = {}, _M6 = {}, _M7 = {}, _M8 = {}, _M9 = {}, _M10 = {}, _M2 = {}, _M1 = exports;
 
-function eachKey(obj, fn) {
+(function(exports) {
 
-    var keys = Object.getOwnPropertyNames(obj);
+var Global = (function() {
 
-    for (var i$0 = 0; i$0 < keys.length; ++i$0)
-        fn(keys[i$0]);
+    try { return global.global } catch (x) {}
+    try { return self.self } catch (x) {}
+    return null;
+})();
 
-    if (!Object.getOwnPropertySymbols)
-        return;
 
-    keys = Object.getOwnPropertySymbols(obj);
 
-    for (var i$1 = 0; i$1 < keys.length; ++i$1)
-        fn(keys[i$1]);
+function transformKey(k) {
+
+    if (k.slice(0, 2) === "@@")
+        k = Symbol[k.slice(2)];
+
+    return k;
 }
 
-function polyfill(obj, methods) {
+function addProperties(target, methods) {
 
-    eachKey(methods, function(key) {
+    Object.keys(methods).forEach(function(k) {
 
-        if (key in obj)
+        var desc = Object.getOwnPropertyDescriptor(methods, k);
+        desc.enumerable = false;
+
+        k = transformKey(k);
+
+        if (k in target)
             return;
 
-        Object.defineProperty(obj, key, {
-
-            value: methods[key],
-            configurable: true,
-            enumerable: false,
-            writable: true
-        });
-
+        Object.defineProperty(target, k, desc);
     });
 }
-
-
-// === Spec Helpers ===
 
 var sign = Math.sign || function(val) {
 
@@ -477,304 +423,83 @@ function assertThis(val, name) {
         throw new TypeError(name + " called on null or undefined");
 }
 
-// === Symbols ===
+exports.global = Global;
+exports.addProperties = addProperties;
+exports.toInteger = toInteger;
+exports.toLength = toLength;
+exports.sameValue = sameValue;
+exports.isRegExp = isRegExp;
+exports.toObject = toObject;
+exports.assertThis = assertThis;
 
-var symbolCounter = 0,
-    global = _esdown.global;
+
+})(_M3);
+
+(function(exports) {
+
+var addProperties = _M3.addProperties;
+
+var symbolCounter = 0;
 
 function fakeSymbol() {
 
     return "__$" + Math.floor(Math.random() * 1e9) + "$" + (++symbolCounter) + "$__";
 }
 
-if (!global.Symbol)
-    global.Symbol = fakeSymbol;
+function polyfill(global) {
 
-polyfill(Symbol, {
+    if (!global.Symbol)
+        global.Symbol = fakeSymbol;
 
-    iterator: Symbol("iterator"),
+    addProperties(Symbol, {
 
-    species: Symbol("species"),
+        iterator: Symbol("iterator"),
 
-    // Experimental async iterator support
-    asyncIterator: Symbol("asyncIterator"),
+        species: Symbol("species"),
 
-});
+        // Experimental async iterator support
+        asyncIterator: Symbol("asyncIterator"),
 
-// === Object ===
+    });
 
-polyfill(Object, {
-
-    is: sameValue,
-
-    assign: function(target, source) {
-
-        target = toObject(target);
-
-        for (var i$2 = 1; i$2 < arguments.length; ++i$2) {
-
-            source = arguments[i$2];
-
-            if (source != null) // null or undefined
-                Object.keys(source).forEach(function(key) { return target[key] = source[key]; });
-        }
-
-        return target;
-    },
-
-    setPrototypeOf: function(object, proto) {
-
-        // Least effort attempt
-        object.__proto__ = proto;
-    },
-
-    getOwnPropertySymbols: function() {
-
-        return [];
-    }
-
-});
-
-// === Number ===
-
-function isInteger(val) {
-
-    return typeof val === "number" && isFinite(val) && toInteger(val) === val;
 }
 
-function epsilon() {
+exports.polyfill = polyfill;
 
-    // Calculate the difference between 1 and the smallest value greater than 1 that
-    // is representable as a Number value
 
-    var result;
+})(_M4);
 
-    for (var next$0 = 1; 1 + next$0 !== 1; next$0 = next$0 / 2)
-        result = next$0;
+(function(exports) {
 
-    return result;
-}
+var addProperties = _M3.addProperties, toObject = _M3.toObject, toLength = _M3.toLength, toInteger = _M3.toInteger;
 
-polyfill(Number, {
+function arrayFind(obj, pred, thisArg, type) {
 
-    EPSILON: epsilon(),
-    MAX_SAFE_INTEGER: 9007199254740991,
-    MIN_SAFE_INTEGER: -9007199254740991,
+    var len = toLength(obj.length),
+        val;
 
-    parseInt: parseInt,
-    parseFloat: parseFloat,
-    isInteger: isInteger,
-    isFinite: function(val) { return typeof val === "number" && isFinite(val) },
-    isNaN: function(val) { return val !== val },
-    isSafeInteger: function(val) { return isInteger(val) && Math.abs(val) <= Number.MAX_SAFE_INTEGER }
+    if (typeof pred !== "function")
+        throw new TypeError(pred + " is not a function");
 
-});
+    for (var i$0 = 0; i$0 < len; ++i$0) {
 
-// === String ===
+        val = obj[i$0];
 
-polyfill(String, {
-
-    raw: function(callsite) { for (var args = [], __$0 = 1; __$0 < arguments.length; ++__$0) args.push(arguments[__$0]); 
-
-        var raw = callsite.raw,
-            len = toLength(raw.length);
-
-        if (len === 0)
-            return "";
-
-        var s = "", i = 0;
-
-        while (true) {
-
-            s += raw[i];
-            if (i + 1 === len || i >= args.length) break;
-            s += args[i++];
-        }
-
-        return s;
-    },
-
-    fromCodePoint: function() { for (var points = [], __$0 = 0; __$0 < arguments.length; ++__$0) points.push(arguments[__$0]); 
-
-        var out = [];
-
-        points.forEach(function(next) {
-
-            next = Number(next);
-
-            if (!sameValue(next, toInteger(next)) || next < 0 || next > 0x10ffff)
-                throw new RangeError("Invalid code point " + next);
-
-            if (next < 0x10000) {
-
-                out.push(String.fromCharCode(next));
-
-            } else {
-
-                next -= 0x10000;
-                out.push(String.fromCharCode((next >> 10) + 0xD800));
-                out.push(String.fromCharCode((next % 0x400) + 0xDC00));
-            }
-        });
-
-        return out.join("");
+        if (pred.call(thisArg, val, i$0, obj))
+            return type === "value" ? val : i$0;
     }
 
-});
-
-// Repeat a string by "squaring"
-function repeat(s, n) {
-
-    if (n < 1) return "";
-    if (n % 2) return repeat(s, n - 1) + s;
-    var half = repeat(s, n / 2);
-    return half + half;
+    return type === "value" ? void 0 : -1;
 }
 
-var StringIterator = _esdown.class(function(__) { "use strict"; var StringIterator;
+function ArrayIterator(array, kind) {
 
-    __({ constructor: StringIterator = function(string) {
+    this.array = array;
+    this.current = 0;
+    this.kind = kind;
+}
 
-        this.string = string;
-        this.current = 0;
-    },
-
-    next: function() {
-
-        var s = this.string,
-            i = this.current,
-            len = s.length;
-
-        if (i >= len) {
-
-            this.current = Infinity;
-            return { value: void 0, done: true };
-        }
-
-        var c = s.charCodeAt(i),
-            chars = 1;
-
-        if (c >= 0xD800 && c <= 0xDBFF && i + 1 < s.length) {
-
-            c = s.charCodeAt(i + 1);
-            chars = (c < 0xDC00 || c > 0xDFFF) ? 1 : 2;
-        }
-
-        this.current += chars;
-
-        return { value: s.slice(i, this.current), done: false };
-    }});
-
-    __(_esdown.computed({}, Symbol.iterator, { _: function() { return this } }));
-
- });
-
-polyfill(String.prototype, _esdown.computed({
-
-    repeat: function(count) {
-
-        assertThis(this, "String.prototype.repeat");
-
-        var string = String(this);
-
-        count = toInteger(count);
-
-        if (count < 0 || count === Infinity)
-            throw new RangeError("Invalid count value");
-
-        return repeat(string, count);
-    },
-
-    startsWith: function(search) {
-
-        assertThis(this, "String.prototype.startsWith");
-
-        if (isRegExp(search))
-            throw new TypeError("First argument to String.prototype.startsWith must not be a regular expression");
-
-        var string = String(this);
-
-        search = String(search);
-
-        var pos = arguments.length > 1 ? arguments[1] : undefined,
-            start = Math.max(toInteger(pos), 0);
-
-        return string.slice(start, start + search.length) === search;
-    },
-
-    endsWith: function(search) {
-
-        assertThis(this, "String.prototype.endsWith");
-
-        if (isRegExp(search))
-            throw new TypeError("First argument to String.prototype.endsWith must not be a regular expression");
-
-        var string = String(this);
-
-        search = String(search);
-
-        var len = string.length,
-            arg = arguments.length > 1 ? arguments[1] : undefined,
-            pos = arg === undefined ? len : toInteger(arg),
-            end = Math.min(Math.max(pos, 0), len);
-
-        return string.slice(end - search.length, end) === search;
-    },
-
-    contains: function(search) {
-
-        assertThis(this, "String.prototype.contains");
-
-        var string = String(this),
-            pos = arguments.length > 1 ? arguments[1] : undefined;
-
-        // Somehow this trick makes method 100% compat with the spec
-        return string.indexOf(search, pos) !== -1;
-    },
-
-    codePointAt: function(pos) {
-
-        assertThis(this, "String.prototype.codePointAt");
-
-        var string = String(this),
-            len = string.length;
-
-        pos = toInteger(pos);
-
-        if (pos < 0 || pos >= len)
-            return undefined;
-
-        var a = string.charCodeAt(pos);
-
-        if (a < 0xD800 || a > 0xDBFF || pos + 1 === len)
-            return a;
-
-        var b = string.charCodeAt(pos + 1);
-
-        if (b < 0xDC00 || b > 0xDFFF)
-            return a;
-
-        return ((a - 0xD800) * 1024) + (b - 0xDC00) + 0x10000;
-    },
-
-    }, Symbol.iterator, { _: function() {
-
-        assertThis(this, "String.prototype[Symbol.iterator]");
-        return new StringIterator(this);
-    }
-
-}));
-
-// === Array ===
-
-var ArrayIterator = _esdown.class(function(__) { "use strict"; var ArrayIterator;
-
-    __({ constructor: ArrayIterator = function(array, kind) {
-
-        this.array = array;
-        this.current = 0;
-        this.kind = kind;
-    },
+addProperties(ArrayIterator.prototype = {}, {
 
     next: function() {
 
@@ -800,189 +525,176 @@ var ArrayIterator = _esdown.class(function(__) { "use strict"; var ArrayIterator
             default:
                 return { value: index, done: false };
         }
-    }});
-
-    __(_esdown.computed({}, Symbol.iterator, { _: function() { return this } }));
-
- });
-
-polyfill(Array, {
-
-    from: function(list) {
-
-        list = toObject(list);
-
-        var ctor = typeof this === "function" ? this : Array, // TODO: Always use "this"?
-            map = arguments[1],
-            thisArg = arguments[2],
-            i = 0,
-            out;
-
-        if (map !== void 0 && typeof map !== "function")
-            throw new TypeError(map + " is not a function");
-
-        var getIter = list[Symbol.iterator];
-
-        if (getIter) {
-
-            var iter$0 = getIter.call(list),
-                result$0;
-
-            out = new ctor;
-
-            while (result$0 = iter$0.next(), !result$0.done) {
-
-                out[i++] = map ? map.call(thisArg, result$0.value, i) : result$0.value;
-                out.length = i;
-            }
-
-        } else {
-
-            var len$0 = toLength(list.length);
-
-            out = new ctor(len$0);
-
-            for (; i < len$0; ++i)
-                out[i] = map ? map.call(thisArg, list[i], i) : list[i];
-
-            out.length = len$0;
-        }
-
-        return out;
     },
 
-    of: function() { for (var items = [], __$0 = 0; __$0 < arguments.length; ++__$0) items.push(arguments[__$0]); 
-
-        var ctor = typeof this === "function" ? this : Array;
-
-        if (ctor === Array)
-            return items;
-
-        var len = items.length,
-            out = new ctor(len);
-
-        for (var i$3 = 0; i$3 < len; ++i$3)
-            out[i$3] = items[i$3];
-
-        out.length = len;
-
-        return out;
-    }
-
+    "@@iterator": function() { return this },
+    
 });
 
-function arrayFind(obj, pred, thisArg, type) {
+function polyfill() {
 
-    var len = toLength(obj.length),
-        val;
+    addProperties(Array, {
 
-    if (typeof pred !== "function")
-        throw new TypeError(pred + " is not a function");
+        from: function(list) {
 
-    for (var i$4 = 0; i$4 < len; ++i$4) {
+            list = toObject(list);
 
-        val = obj[i$4];
+            var ctor = typeof this === "function" ? this : Array, // TODO: Always use "this"?
+                map = arguments[1],
+                thisArg = arguments[2],
+                i = 0,
+                out;
 
-        if (pred.call(thisArg, val, i$4, obj))
-            return type === "value" ? val : i$4;
-    }
+            if (map !== void 0 && typeof map !== "function")
+                throw new TypeError(map + " is not a function");
 
-    return type === "value" ? void 0 : -1;
+            var getIter = list[Symbol.iterator];
+
+            if (getIter) {
+
+                var iter$0 = getIter.call(list),
+                    result$0;
+
+                out = new ctor;
+
+                while (result$0 = iter$0.next(), !result$0.done) {
+
+                    out[i++] = map ? map.call(thisArg, result$0.value, i) : result$0.value;
+                    out.length = i;
+                }
+
+            } else {
+
+                var len$0 = toLength(list.length);
+
+                out = new ctor(len$0);
+
+                for (; i < len$0; ++i)
+                    out[i] = map ? map.call(thisArg, list[i], i) : list[i];
+
+                out.length = len$0;
+            }
+
+            return out;
+        },
+
+        of: function() { for (var items = [], __$0 = 0; __$0 < arguments.length; ++__$0) items.push(arguments[__$0]); 
+
+            var ctor = typeof this === "function" ? this : Array;
+
+            if (ctor === Array)
+                return items;
+
+            var len = items.length,
+                out = new ctor(len);
+
+            for (var i$1 = 0; i$1 < len; ++i$1)
+                out[i$1] = items[i$1];
+
+            out.length = len;
+
+            return out;
+        }
+
+    });
+
+    addProperties(Array.prototype, {
+
+        copyWithin: function(target, start) {
+
+            var obj = toObject(this),
+                len = toLength(obj.length),
+                end = arguments[2];
+
+            target = toInteger(target);
+            start = toInteger(start);
+
+            var to = target < 0 ? Math.max(len + target, 0) : Math.min(target, len),
+                from = start < 0 ? Math.max(len + start, 0) : Math.min(start, len);
+
+            end = end !== void 0 ? toInteger(end) : len;
+            end = end < 0 ? Math.max(len + end, 0) : Math.min(end, len);
+
+            var count = Math.min(end - from, len - to),
+                dir = 1;
+
+            if (from < to && to < from + count) {
+
+                dir = -1;
+                from += count - 1;
+                to += count - 1;
+            }
+
+            for (; count > 0; --count) {
+
+                if (from in obj) obj[to] = obj[from];
+                else delete obj[to];
+
+                from += dir;
+                to += dir;
+            }
+
+            return obj;
+        },
+
+        fill: function(value) {
+
+            var obj = toObject(this),
+                len = toLength(obj.length),
+                start = toInteger(arguments[1]),
+                pos = start < 0 ? Math.max(len + start, 0) : Math.min(start, len),
+                end = arguments.length > 2 ? toInteger(arguments[2]) : len;
+
+            end = end < 0 ? Math.max(len + end, 0) : Math.min(end, len);
+
+            for (; pos < end; ++pos)
+                obj[pos] = value;
+
+            return obj;
+        },
+
+        find: function(pred) {
+
+            return arrayFind(toObject(this), pred, arguments[1], "value");
+        },
+
+        findIndex: function(pred) {
+
+            return arrayFind(toObject(this), pred, arguments[1], "index");
+        },
+
+        values: function() { return new ArrayIterator(this, "values") },
+
+        entries: function() { return new ArrayIterator(this, "entries") },
+
+        keys: function() { return new ArrayIterator(this, "keys") },
+
+        "@@iterator": function() { return this.values() },
+
+    });
+
 }
 
-polyfill(Array.prototype, _esdown.computed({
-
-    copyWithin: function(target, start) {
-
-        var obj = toObject(this),
-            len = toLength(obj.length),
-            end = arguments[2];
-
-        target = toInteger(target);
-        start = toInteger(start);
-
-        var to = target < 0 ? Math.max(len + target, 0) : Math.min(target, len),
-            from = start < 0 ? Math.max(len + start, 0) : Math.min(start, len);
-
-        end = end !== void 0 ? toInteger(end) : len;
-        end = end < 0 ? Math.max(len + end, 0) : Math.min(end, len);
-
-        var count = Math.min(end - from, len - to),
-            dir = 1;
-
-        if (from < to && to < from + count) {
-
-            dir = -1;
-            from += count - 1;
-            to += count - 1;
-        }
-
-        for (; count > 0; --count) {
-
-            if (from in obj) obj[to] = obj[from];
-            else delete obj[to];
-
-            from += dir;
-            to += dir;
-        }
-
-        return obj;
-    },
-
-    fill: function(value) {
-
-        var obj = toObject(this),
-            len = toLength(obj.length),
-            start = toInteger(arguments[1]),
-            pos = start < 0 ? Math.max(len + start, 0) : Math.min(start, len),
-            end = arguments.length > 2 ? toInteger(arguments[2]) : len;
-
-        end = end < 0 ? Math.max(len + end, 0) : Math.min(end, len);
-
-        for (; pos < end; ++pos)
-            obj[pos] = value;
-
-        return obj;
-    },
-
-    find: function(pred) {
-
-        return arrayFind(toObject(this), pred, arguments[1], "value");
-    },
-
-    findIndex: function(pred) {
-
-        return arrayFind(toObject(this), pred, arguments[1], "index");
-    },
-
-    values: function() { return new ArrayIterator(this, "values") },
-
-    entries: function() { return new ArrayIterator(this, "entries") },
-
-    keys: function() { return new ArrayIterator(this, "keys") },
-
-    }, Symbol.iterator, { _: function() { return this.values() }
-
-}));
+exports.polyfill = polyfill;
 
 
-})();
+})(_M5);
 
-(function() {
+(function(exports) {
 
-var global = _esdown.global,
-    ORIGIN = {},
-    REMOVED = {};
+var addProperties = _M3.addProperties;
 
-var MapNode = _esdown.class(function(__) { "use strict"; var MapNode;
+var ORIGIN = {}, REMOVED = {};
 
-    __({ constructor: MapNode = function(key, val) {
+function MapNode(key, val) {
 
-        this.key = key;
-        this.value = val;
-        this.prev = this;
-        this.next = this;
-    },
+    this.key = key;
+    this.value = val;
+    this.prev = this;
+    this.next = this;
+}
+
+addProperties(MapNode.prototype, {
 
     insert: function(next) {
 
@@ -997,17 +709,17 @@ var MapNode = _esdown.class(function(__) { "use strict"; var MapNode;
         this.prev.next = this.next;
         this.next.prev = this.prev;
         this.key = REMOVED;
-    }});
-
- });
-
-var MapIterator = _esdown.class(function(__) { "use strict"; var MapIterator;
-
-    __({ constructor: MapIterator = function(node, kind) {
-
-        this.current = node;
-        this.kind = kind;
     },
+
+});
+
+function MapIterator(node, kind) {
+
+    this.current = node;
+    this.kind = kind;
+}
+
+addProperties(MapIterator.prototype = {}, {
 
     next: function() {
 
@@ -1032,10 +744,11 @@ var MapIterator = _esdown.class(function(__) { "use strict"; var MapIterator;
             default:
                 return { value: node.key, done: false };
         }
-    }});
+    },
 
-    __(_esdown.computed({}, Symbol.iterator, { _: function() { return this } }));
- });
+    "@@iterator": function() { return this },
+
+});
 
 function hashKey(key) {
 
@@ -1048,16 +761,16 @@ function hashKey(key) {
     throw new TypeError("Map and Set keys must be strings or numbers in esdown");
 }
 
-var Map = _esdown.class(function(__) { "use strict"; var Map;
+function Map() {
 
-    __({ constructor: Map = function() {
+    if (arguments.length > 0)
+        throw new Error("Arguments to Map constructor are not supported in esdown");
 
-        if (arguments.length > 0)
-            throw new Error("Arguments to Map constructor are not supported in esdown");
+    this._index = {};
+    this._origin = new MapNode(ORIGIN);
+}
 
-        this._index = {};
-        this._origin = new MapNode(ORIGIN);
-    },
+addProperties(Map.prototype, {
 
     clear: function() {
 
@@ -1132,30 +845,29 @@ var Map = _esdown.class(function(__) { "use strict"; var Map;
 
     keys: function() { return new MapIterator(this._origin.next, "keys") },
     values: function() { return new MapIterator(this._origin.next, "values") },
-    entries: function() { return new MapIterator(this._origin.next, "entries") }});
+    entries: function() { return new MapIterator(this._origin.next, "entries") },
 
-    __(_esdown.computed({}, Symbol.iterator, { _: function() { return new MapIterator(this._origin.next, "entries") } }));
+    "@@iterator": function() { return new MapIterator(this._origin.next, "entries") },
 
- });
+});
 
 var mapSet = Map.prototype.set;
 
-var Set = _esdown.class(function(__) { "use strict"; var Set;
+function Set() {
 
-    __({ constructor: Set = function() {
+    if (arguments.length > 0)
+        throw new Error("Arguments to Set constructor are not supported in esdown");
 
-        if (arguments.length > 0)
-            throw new Error("Arguments to Set constructor are not supported in esdown");
+    this._index = {};
+    this._origin = new MapNode(ORIGIN);
+}
 
-        this._index = {};
-        this._origin = new MapNode(ORIGIN);
-    },
+addProperties(Set.prototype, {
 
-    add: function(key) { return mapSet.call(this, key, key) }});
+    add: function(key) { return mapSet.call(this, key, key) },
+    "@@iterator": function() { return new MapIterator(this._origin.next, "entries") },
 
-    __(_esdown.computed({}, Symbol.iterator, { _: function() { return new MapIterator(this._origin.next, "entries") } }));
-
- });
+});
 
 // Copy shared prototype members to Set
 ["clear", "delete", "forEach", "has", "size", "keys", "values", "entries"].forEach(function(k) {
@@ -1164,420 +876,728 @@ var Set = _esdown.class(function(__) { "use strict"; var Set;
     Object.defineProperty(Set.prototype, k, d);
 });
 
-if (!global.Map || !global.Map.prototype.entries) {
+function polyfill(global) {
 
-    global.Map = Map;
-    global.Set = Set;
+    if (!global.Map || !global.Map.prototype.entries) {
+
+        global.Map = Map;
+        global.Set = Set;
+    }
 }
 
+exports.polyfill = polyfill;
 
-})();
 
-(function() {
+})(_M6);
 
-(function() { "use strict";
+(function(exports) {
 
-// Find global variable and exit if Promise is defined on it
+var toInteger = _M3.toInteger, addProperties = _M3.addProperties;
 
-var Global = (function() {
-    try { return self.self } catch (x) {}
-    try { return global.global } catch (x) {}
-    return null;
-})();
+function isInteger(val) {
 
-if (!Global || typeof Global.Promise === "function")
-    return;
+    return typeof val === "number" && isFinite(val) && toInteger(val) === val;
+}
 
-// Create an efficient microtask queueing mechanism
+function epsilon() {
 
-var runLater = (function() {
+    // Calculate the difference between 1 and the smallest value greater than 1 that
+    // is representable as a Number value
+
+    var result;
+
+    for (var next$0 = 1; 1 + next$0 !== 1; next$0 = next$0 / 2)
+        result = next$0;
+
+    return result;
+}
+
+function polyfill() {
+
+    addProperties(Number, {
+
+        EPSILON: epsilon(),
+        MAX_SAFE_INTEGER: 9007199254740991,
+        MIN_SAFE_INTEGER: -9007199254740991,
+
+        parseInt: parseInt,
+        parseFloat: parseFloat,
+        isInteger: isInteger,
+        isFinite: function(val) { return typeof val === "number" && isFinite(val) },
+        isNaN: function(val) { return val !== val },
+        isSafeInteger: function(val) { return isInteger(val) && Math.abs(val) <= Number.MAX_SAFE_INTEGER }
+
+    });
+}
+
+exports.polyfill = polyfill;
+
+
+})(_M7);
+
+(function(exports) {
+
+var addProperties = _M3.addProperties, toObject = _M3.toObject, sameValue = _M3.sameValue;
+
+function polyfill() {
+
+    addProperties(Object, {
+
+        is: sameValue,
+
+        assign: function(target, source) {
+
+            target = toObject(target);
+
+            for (var i$0 = 1; i$0 < arguments.length; ++i$0) {
+
+                source = arguments[i$0];
+
+                if (source != null) // null or undefined
+                    Object.keys(source).forEach(function(key) { return target[key] = source[key]; });
+            }
+
+            return target;
+        },
+
+        setPrototypeOf: function(object, proto) {
+
+            // Least effort attempt
+            object.__proto__ = proto;
+        },
+
+        getOwnPropertySymbols: function() {
+
+            return [];
+        },
+
+    });
+
+}
+
+exports.polyfill = polyfill;
+
+
+})(_M8);
+
+(function(exports) {
+
+var addProperties = _M3.addProperties, global = _M3.global;
+
+var runLater = (function(_) {
+
     // Node
-    if (Global.process && typeof process.version === "string") {
-        return Global.setImmediate ?
-            function(fn) { setImmediate(fn); } :
-            function(fn) { process.nextTick(fn); };
+    if (global.process && typeof process.version === "string") {
+        return global.setImmediate ?
+            function(fn) { setImmediate(fn) } :
+            function(fn) { process.nextTick(fn) };
     }
 
     // Newish Browsers
-    var Observer = Global.MutationObserver || Global.WebKitMutationObserver;
+    var Observer = global.MutationObserver || global.WebKitMutationObserver;
 
     if (Observer) {
-        var div = document.createElement("div"),
-            queuedFn = void 0;
 
-        var observer = new Observer(function() {
-            var fn = queuedFn;
-            queuedFn = void 0;
+        var div$0 = document.createElement("div"),
+            queuedFn$0 = null;
+
+        var observer$0 = new Observer(function(_) {
+            var fn = queuedFn$0;
+            queuedFn$0 = null;
             fn();
         });
 
-        observer.observe(div, { attributes: true });
+        observer$0.observe(div$0, { attributes: true });
 
         return function(fn) {
-            if (queuedFn !== void 0)
+
+            if (queuedFn$0 !== null)
                 throw new Error("Only one function can be queued at a time");
-            queuedFn = fn;
-            div.classList.toggle("x");
+
+            queuedFn$0 = fn;
+            div$0.classList.toggle("x");
         };
     }
 
     // Fallback
-    return function(fn) { setTimeout(fn, 0); };
+    return function(fn) { setTimeout(fn, 0) };
+
 })();
 
-var EnqueueMicrotask = (function() {
-    var queue = null;
+var taskQueue = null;
 
-    function flush() {
-        var q = queue;
-        queue = null;
-        for (var i = 0; i < q.length; ++i)
-            q[i]();
+function flushQueue() {
+
+    var q = taskQueue;
+    taskQueue = null;
+
+    for (var i$0 = 0; i$0 < q.length; ++i$0)
+        q[i$0]();
+}
+
+function enqueueMicrotask(fn) {
+
+    // fn must not throw
+    if (!taskQueue) {
+        taskQueue = [];
+        runLater(flushQueue);
     }
 
-    return function PromiseEnqueueMicrotask(fn) {
-        // fn must not throw
-        if (!queue) {
-            queue = [];
-            runLater(flush);
-        }
-        queue.push(fn);
-    };
-})();
+    taskQueue.push(fn);
+}
 
-// Mock V8 internal functions and vars
+var OPTIMIZED = {};
+var PENDING = 0;
+var RESOLVED = +1;
+var REJECTED = -1;
 
-function SET_PRIVATE(obj, prop, val) { obj[prop] = val; }
-function GET_PRIVATE(obj, prop) { return obj[prop]; }
-function IS_SPEC_FUNCTION(obj) { return typeof obj === "function"; }
-function IS_SPEC_OBJECT(obj) { return obj === Object(obj); }
-function HAS_DEFINED_PRIVATE(obj, prop) { return prop in obj; }
-function IS_UNDEFINED(x) { return x === void 0; }
-function MakeTypeError(msg) { return new TypeError(msg); }
+function idResolveHandler(x) { return x }
+function idRejectHandler(r) { throw r }
+function noopResolver() { }
 
-// In IE8 Object.defineProperty only works on DOM nodes, and defineProperties does not exist
-var _defineProperty = Object.defineProperties && Object.defineProperty;
+function Promise(resolver) { var __this = this; 
 
-function AddNamedProperty(target, name, value) {
-    if (!_defineProperty) {
-        target[name] = value;
+    this._status = PENDING;
+
+    // Optimized case to avoid creating an uneccessary closure.  Creator assumes
+    // responsibility for setting initial state.
+    if (resolver === OPTIMIZED)
         return;
+
+    if (typeof resolver !== "function")
+        throw new TypeError("Resolver is not a function");
+
+    this._onResolve = [];
+    this._onReject = [];
+
+    try { resolver(function(x) { resolvePromise(__this, x) }, function(r) { rejectPromise(__this, r) }) }
+    catch (e) { rejectPromise(this, e) }
+}
+
+function chain(promise, onResolve, onReject) { if (onResolve === void 0) onResolve = idResolveHandler; if (onReject === void 0) onReject = idRejectHandler; 
+
+    var deferred = makeDeferred(promise.constructor);
+
+    switch (promise._status) {
+
+        case PENDING:
+            promise._onResolve.push(onResolve, deferred);
+            promise._onReject.push(onReject, deferred);
+            break;
+
+        case RESOLVED:
+            enqueueHandlers(promise._value, [onResolve, deferred], RESOLVED);
+            break;
+
+        case REJECTED:
+            enqueueHandlers(promise._value, [onReject, deferred], REJECTED);
+            break;
     }
 
-    _defineProperty(target, name, {
-        configurable: true,
-        writable: true,
-        enumerable: false,
-        value: value
-    });
+    return deferred.promise;
 }
 
-function InstallFunctions(target, attr, list) {
-    for (var i = 0; i < list.length; i += 2)
-        AddNamedProperty(target, list[i], list[i + 1]);
+function resolvePromise(promise, x) {
+
+    completePromise(promise, RESOLVED, x, promise._onResolve);
 }
 
-var IsArray = Array.isArray || (function(obj) {
-    var str = Object.prototype.toString;
-    return function(obj) { return str.call(obj) === "[object Array]" };
-})();
+function rejectPromise(promise, r) {
 
-var UNDEFINED, DONT_ENUM, InternalArray = Array;
-
-// V8 Implementation
-
-var IsPromise;
-var PromiseCreate;
-var PromiseResolve;
-var PromiseReject;
-var PromiseChain;
-var PromiseCatch;
-var PromiseThen;
-
-// Status values: 0 = pending, +1 = resolved, -1 = rejected
-var promiseStatus = "Promise#status";
-var promiseValue = "Promise#value";
-var promiseOnResolve = "Promise#onResolve";
-var promiseOnReject = "Promise#onReject";
-var promiseRaw = {};
-var promiseHasHandler = "Promise#hasHandler";
-var lastMicrotaskId = 0;
-
-var $Promise = function Promise(resolver) {
-    if (resolver === promiseRaw) return;
-    if (!IS_SPEC_FUNCTION(resolver))
-      throw MakeTypeError('resolver_not_a_function', [resolver]);
-    var promise = PromiseInit(this);
-    try {
-        resolver(function(x) { PromiseResolve(promise, x) },
-                 function(r) { PromiseReject(promise, r) });
-    } catch (e) {
-        PromiseReject(promise, e);
-    }
+    completePromise(promise, REJECTED, r, promise._onReject);
 }
 
-// Core functionality.
+function completePromise(promise, status, value, queue) {
 
-function PromiseSet(promise, status, value, onResolve, onReject) {
-    SET_PRIVATE(promise, promiseStatus, status);
-    SET_PRIVATE(promise, promiseValue, value);
-    SET_PRIVATE(promise, promiseOnResolve, onResolve);
-    SET_PRIVATE(promise, promiseOnReject, onReject);
-    return promise;
-}
+    if (promise._status === PENDING) {
 
-function PromiseInit(promise) {
-    return PromiseSet(promise, 0, UNDEFINED, new InternalArray, new InternalArray);
-}
+        promise._status = status;
+        promise._value = value;
 
-function PromiseDone(promise, status, value, promiseQueue) {
-    if (GET_PRIVATE(promise, promiseStatus) === 0) {
-        PromiseEnqueue(value, GET_PRIVATE(promise, promiseQueue), status);
-        PromiseSet(promise, status, value);
+        enqueueHandlers(value, queue, status);
     }
 }
 
-function PromiseCoerce(constructor, x) {
-    if (!IsPromise(x) && IS_SPEC_OBJECT(x)) {
-        var then;
-        try {
-            then = x.then;
-        } catch(r) {
-            return PromiseRejected.call(constructor, r);
-        }
-        if (IS_SPEC_FUNCTION(then)) {
-            var deferred = PromiseDeferred.call(constructor);
-            try {
-                then.call(x, deferred.resolve, deferred.reject);
-            } catch(r) {
-                deferred.reject(r);
-            }
-            return deferred.promise;
+function coerce(constructor, x) {
+
+    if (!isPromise(x) && Object(x) === x) {
+
+        var then$0;
+
+        try { then$0 = x.then }
+        catch(r) { return makeRejected(constructor, r) }
+
+        if (typeof then$0 === "function") {
+
+            var deferred$0 = makeDeferred(constructor);
+
+            try { then$0.call(x, deferred$0.resolve, deferred$0.reject) }
+            catch(r) { deferred$0.reject(r) }
+
+            return deferred$0.promise;
         }
     }
+
     return x;
 }
 
-function PromiseHandle(value, handler, deferred) {
-    try {
-        var result = handler(value);
-        if (result === deferred.promise)
-            throw MakeTypeError('promise_cyclic', [result]);
-        else if (IsPromise(result))
-            PromiseChain.call(result, deferred.resolve, deferred.reject);
-        else
-            deferred.resolve(result);
-    } catch (exception) {
-        try { deferred.reject(exception) } catch (e) { }
-    }
-}
+function enqueueHandlers(value, tasks, status) {
 
-function PromiseEnqueue(value, tasks, status) {
-    EnqueueMicrotask(function() {
-        for (var i = 0; i < tasks.length; i += 2)
-            PromiseHandle(value, tasks[i], tasks[i + 1]);
+    enqueueMicrotask(function(_) {
+
+        for (var i$1 = 0; i$1 < tasks.length; i$1 += 2)
+            runHandler(value, tasks[i$1], tasks[i$1 + 1]);
     });
 }
 
-function PromiseIdResolveHandler(x) { return x }
-function PromiseIdRejectHandler(r) { throw r }
+function runHandler(value, handler, deferred) {
 
-function PromiseNopResolver() {}
+    try {
 
-// -------------------------------------------------------------------
-// Define exported functions.
+        var result$0 = handler(value);
 
-// For bootstrapper.
+        if (result$0 === deferred.promise)
+            throw new TypeError("Promise cycle");
+        else if (isPromise(result$0))
+            chain(result$0, deferred.resolve, deferred.reject);
+        else
+            deferred.resolve(result$0);
 
-IsPromise = function IsPromise(x) {
-    return IS_SPEC_OBJECT(x) && HAS_DEFINED_PRIVATE(x, promiseStatus);
-};
+    } catch (e) {
 
-PromiseCreate = function PromiseCreate() {
-    return new $Promise(PromiseNopResolver);
-};
+        try { deferred.reject(e) }
+        catch (e) { }
+    }
+}
 
-PromiseResolve = function PromiseResolve(promise, x) {
-    PromiseDone(promise, +1, x, promiseOnResolve);
-};
+function isPromise(x) {
 
-PromiseReject = function PromiseReject(promise, r) {
-    PromiseDone(promise, -1, r, promiseOnReject);
-};
+    try { return x._status !== void 0 }
+    catch (e) { return false }
+}
 
-// Convenience.
+function makeDeferred(constructor) {
 
-function PromiseDeferred() {
-    if (this === $Promise) {
-        // Optimized case, avoid extra closure.
-        var promise = PromiseInit(new $Promise(promiseRaw));
+    if (constructor === Promise) {
+
+        var promise$0 = new Promise(OPTIMIZED);
+
+        promise$0._onResolve = [];
+        promise$0._onReject = [];
+
         return {
-            promise: promise,
-            resolve: function(x) { PromiseResolve(promise, x) },
-            reject: function(r) { PromiseReject(promise, r) }
+
+            promise: promise$0,
+            resolve: function(x) { resolvePromise(promise$0, x) },
+            reject: function(r) { rejectPromise(promise$0, r) },
         };
+
     } else {
-        var result = {};
-        result.promise = new this(function(resolve, reject) {
-            result.resolve = resolve;
-            result.reject = reject;
+
+        var result$1 = {};
+
+        result$1.promise = new constructor(function(resolve, reject) {
+
+            result$1.resolve = resolve;
+            result$1.reject = reject;
         });
-        return result;
+
+        return result$1;
     }
 }
 
-function PromiseResolved(x) {
-    if (this === $Promise) {
-        // Optimized case, avoid extra closure.
-        return PromiseSet(new $Promise(promiseRaw), +1, x);
-    } else {
-        return new this(function(resolve, reject) { resolve(x) });
+function makeRejected(constructor, r) {
+
+    if (constructor === Promise) {
+
+        var promise$1 = new Promise(OPTIMIZED);
+        promise$1._status = REJECTED;
+        promise$1._value = r;
+        return promise$1;
     }
+
+    return new constructor(function(resolve, reject) { return reject(r); });
 }
 
-function PromiseRejected(r) {
-    var promise;
-    if (this === $Promise) {
-        // Optimized case, avoid extra closure.
-        promise = PromiseSet(new $Promise(promiseRaw), -1, r);
-    } else {
-        promise = new this(function(resolve, reject) { reject(r) });
+function iterate(values, fn) {
+
+    if (typeof Symbol !== "function" || !Symbol.iterator) {
+
+        if (!Array.isArray(values))
+            throw new TypeError("Invalid argument");
+
+        values.forEach(fn);
     }
-    return promise;
+
+    var i = 0;
+
+    for (var __$0 = (values)[Symbol.iterator](), __$1; __$1 = __$0.next(), !__$1.done;)
+        { var x$0 = __$1.value; fn(x$0, i++); }
 }
 
-// Simple chaining.
+addProperties(Promise.prototype, {
 
-PromiseChain = function PromiseChain(onResolve, onReject) {
-    onResolve = IS_UNDEFINED(onResolve) ? PromiseIdResolveHandler : onResolve;
-    onReject = IS_UNDEFINED(onReject) ? PromiseIdRejectHandler : onReject;
-    var deferred = PromiseDeferred.call(this.constructor);
-    switch (GET_PRIVATE(this, promiseStatus)) {
-        case UNDEFINED:
-            throw MakeTypeError('not_a_promise', [this]);
-        case 0:  // Pending
-            GET_PRIVATE(this, promiseOnResolve).push(onResolve, deferred);
-            GET_PRIVATE(this, promiseOnReject).push(onReject, deferred);
-            break;
-        case +1:  // Resolved
-            PromiseEnqueue(GET_PRIVATE(this, promiseValue), [onResolve, deferred], +1);
-            break;
-        case -1:  // Rejected
-            PromiseEnqueue(GET_PRIVATE(this, promiseValue), [onReject, deferred], -1);
-            break;
-    }
-    // Mark this promise as having handler.
-    SET_PRIVATE(this, promiseHasHandler, true);
-    return deferred.promise;
-}
+    then: function(onResolve, onReject) { var __this = this; 
 
-PromiseCatch = function PromiseCatch(onReject) {
-    return this.then(UNDEFINED, onReject);
-}
+        onResolve = typeof onResolve === "function" ? onResolve : idResolveHandler;
+        onReject = typeof onReject === "function" ? onReject : idRejectHandler;
 
-// Multi-unwrapped chaining with thenable coercion.
+        var constructor = this.constructor;
 
-PromiseThen = function PromiseThen(onResolve, onReject) {
-    onResolve = IS_SPEC_FUNCTION(onResolve) ? onResolve : PromiseIdResolveHandler;
-    onReject = IS_SPEC_FUNCTION(onReject) ? onReject : PromiseIdRejectHandler;
-    var that = this;
-    var constructor = this.constructor;
-    return PromiseChain.call(
-        this,
-        function(x) {
-            x = PromiseCoerce(constructor, x);
-            return x === that ? onReject(MakeTypeError('promise_cyclic', [x])) :
-                IsPromise(x) ? x.then(onResolve, onReject) :
+        return chain(this, function(x) {
+
+            x = coerce(constructor, x);
+
+            return x === __this ? onReject(new TypeError("Promise cycle")) :
+                isPromise(x) ? x.then(onResolve, onReject) :
                 onResolve(x);
-        },
-        onReject);
-}
 
-// Combinators.
+        }, onReject);
+    },
 
-function PromiseCast(x) {
-    return IsPromise(x) ? x : new this(function(resolve) { resolve(x) });
-}
+    catch: function(onReject) {
 
-function PromiseAll(values) {
-    var deferred = PromiseDeferred.call(this);
-    var resolutions = [];
-    if (!IsArray(values)) {
-        deferred.reject(MakeTypeError('invalid_argument'));
-        return deferred.promise;
-    }
-    try {
-        var count = values.length;
-        if (count === 0) {
-            deferred.resolve(resolutions);
-        } else {
-            for (var i = 0; i < values.length; ++i) {
-                this.resolve(values[i]).then(
-                    (function() {
-                        // Nested scope to get closure over current i (and avoid .bind).
-                        var i_captured = i;
-                        return function(x) {
-                            resolutions[i_captured] = x;
-                            if (--count === 0) deferred.resolve(resolutions);
-                        };
-                    })(),
-                    function(r) { deferred.reject(r) });
-            }
+        return this.then(void 0, onReject);
+    },
+
+});
+
+addProperties(Promise, {
+
+    reject: function(e) {
+
+        return makeRejected(this, e);
+    },
+
+    resolve: function(x) {
+
+        return isPromise(x) ? x : new this(function(resolve) { return resolve(x); });
+    },
+
+    all: function(values) { var __this = this; 
+
+        var deferred = makeDeferred(this),
+            resolutions = [],
+            count = 0;
+
+        try {
+
+            iterate(values, function(x, i) {
+
+                count++;
+
+                __this.resolve(x).then(function(value) {
+
+                    resolutions[i] = value;
+
+                    if (--count === 0)
+                        deferred.resolve(resolutions);
+
+                }, deferred.reject);
+
+            });
+
+            if (count === 0)
+                deferred.resolve(resolutions);
+
+        } catch (e) {
+
+            deferred.reject(e);
         }
-    } catch (e) {
-        deferred.reject(e);
-    }
-    return deferred.promise;
-}
 
-function PromiseOne(values) {
-    var deferred = PromiseDeferred.call(this);
-    if (!IsArray(values)) {
-        deferred.reject(MakeTypeError('invalid_argument'));
         return deferred.promise;
-    }
-    try {
-        for (var i = 0; i < values.length; ++i) {
-            this.resolve(values[i]).then(
-                function(x) { deferred.resolve(x) },
-                function(r) { deferred.reject(r) });
+    },
+
+    race: function(values) { var __this = this; 
+
+        var deferred = makeDeferred(this);
+
+        try {
+
+            iterate(values, function(x) { return __this.resolve(x).then(
+                deferred.resolve,
+                deferred.reject); });
+
+        } catch (e) {
+
+            deferred.reject(e);
         }
-    } catch (e) {
-        deferred.reject(e);
-    }
-    return deferred.promise;
+
+        return deferred.promise;
+    },
+
+});
+
+function polyfill() {
+
+    if (!global.Promise)
+        global.Promise = Promise;
 }
 
-// -------------------------------------------------------------------
-// Install exported functions.
-
-AddNamedProperty(Global, 'Promise', $Promise, DONT_ENUM);
-
-InstallFunctions($Promise, DONT_ENUM, [
-    "defer", PromiseDeferred,
-    "accept", PromiseResolved,
-    "reject", PromiseRejected,
-    "all", PromiseAll,
-    "race", PromiseOne,
-    "resolve", PromiseCast
-]);
-
-InstallFunctions($Promise.prototype, DONT_ENUM, [
-    "chain", PromiseChain,
-    "then", PromiseThen,
-    "catch", PromiseCatch
-]);
-
-})();
+exports.polyfill = polyfill;
 
 
-})();
-
-
-
-var _M19 = {},_M20 = {},_M21 = {},_M10 = {},_M4 = {},_M5 = {},_M28 = {},_M24 = {},_M31 = {},_M29 = {},_M30 = {},_M25 = {},_M26 = {},_M27 = {},_M22 = {},_M23 = {},_M18 = {},_M9 = {},_M16 = {},_M17 = {},_M15 = {},_M8 = {},_M14 = {},_M6 = {},_M7 = {},_M1 = exports;
+})(_M9);
 
 (function(exports) {
+
+var addProperties = _M3.addProperties,
+    toLength = _M3.toLength,
+    toInteger = _M3.toInteger,
+    sameValue = _M3.sameValue,
+    assertThis = _M3.assertThis,
+    isRegExp = _M3.isRegExp;
+
+
+
+
+
+// Repeat a string by "squaring"
+function repeat(s, n) {
+
+    if (n < 1) return "";
+    if (n % 2) return repeat(s, n - 1) + s;
+    var half = repeat(s, n / 2);
+    return half + half;
+}
+
+function StringIterator(string) {
+
+    this.string = string;
+    this.current = 0;
+}
+
+addProperties(StringIterator.prototype = {}, {
+
+    next: function() {
+
+        var s = this.string,
+            i = this.current,
+            len = s.length;
+
+        if (i >= len) {
+
+            this.current = Infinity;
+            return { value: void 0, done: true };
+        }
+
+        var c = s.charCodeAt(i),
+            chars = 1;
+
+        if (c >= 0xD800 && c <= 0xDBFF && i + 1 < s.length) {
+
+            c = s.charCodeAt(i + 1);
+            chars = (c < 0xDC00 || c > 0xDFFF) ? 1 : 2;
+        }
+
+        this.current += chars;
+
+        return { value: s.slice(i, this.current), done: false };
+    },
+
+    "@@iterator": function() { return this },
+
+});
+
+function polyfill() {
+
+    addProperties(String, {
+
+        raw: function(callsite) { for (var args = [], __$0 = 1; __$0 < arguments.length; ++__$0) args.push(arguments[__$0]); 
+
+            var raw = callsite.raw,
+                len = toLength(raw.length);
+
+            if (len === 0)
+                return "";
+
+            var s = "", i = 0;
+
+            while (true) {
+
+                s += raw[i];
+                if (i + 1 === len || i >= args.length) break;
+                s += args[i++];
+            }
+
+            return s;
+        },
+
+        fromCodePoint: function() { for (var points = [], __$0 = 0; __$0 < arguments.length; ++__$0) points.push(arguments[__$0]); 
+
+            var out = [];
+
+            points.forEach(function(next) {
+
+                next = Number(next);
+
+                if (!sameValue(next, toInteger(next)) || next < 0 || next > 0x10ffff)
+                    throw new RangeError("Invalid code point " + next);
+
+                if (next < 0x10000) {
+
+                    out.push(String.fromCharCode(next));
+
+                } else {
+
+                    next -= 0x10000;
+                    out.push(String.fromCharCode((next >> 10) + 0xD800));
+                    out.push(String.fromCharCode((next % 0x400) + 0xDC00));
+                }
+            });
+
+            return out.join("");
+        }
+
+    });
+
+    addProperties(String.prototype, {
+
+        repeat: function(count) {
+
+            assertThis(this, "String.prototype.repeat");
+
+            var string = String(this);
+
+            count = toInteger(count);
+
+            if (count < 0 || count === Infinity)
+                throw new RangeError("Invalid count value");
+
+            return repeat(string, count);
+        },
+
+        startsWith: function(search) {
+
+            assertThis(this, "String.prototype.startsWith");
+
+            if (isRegExp(search))
+                throw new TypeError("First argument to String.prototype.startsWith must not be a regular expression");
+
+            var string = String(this);
+
+            search = String(search);
+
+            var pos = arguments.length > 1 ? arguments[1] : undefined,
+                start = Math.max(toInteger(pos), 0);
+
+            return string.slice(start, start + search.length) === search;
+        },
+
+        endsWith: function(search) {
+
+            assertThis(this, "String.prototype.endsWith");
+
+            if (isRegExp(search))
+                throw new TypeError("First argument to String.prototype.endsWith must not be a regular expression");
+
+            var string = String(this);
+
+            search = String(search);
+
+            var len = string.length,
+                arg = arguments.length > 1 ? arguments[1] : undefined,
+                pos = arg === undefined ? len : toInteger(arg),
+                end = Math.min(Math.max(pos, 0), len);
+
+            return string.slice(end - search.length, end) === search;
+        },
+
+        contains: function(search) {
+
+            assertThis(this, "String.prototype.contains");
+
+            var string = String(this),
+                pos = arguments.length > 1 ? arguments[1] : undefined;
+
+            // Somehow this trick makes method 100% compat with the spec
+            return string.indexOf(search, pos) !== -1;
+        },
+
+        codePointAt: function(pos) {
+
+            assertThis(this, "String.prototype.codePointAt");
+
+            var string = String(this),
+                len = string.length;
+
+            pos = toInteger(pos);
+
+            if (pos < 0 || pos >= len)
+                return undefined;
+
+            var a = string.charCodeAt(pos);
+
+            if (a < 0xD800 || a > 0xDBFF || pos + 1 === len)
+                return a;
+
+            var b = string.charCodeAt(pos + 1);
+
+            if (b < 0xDC00 || b > 0xDFFF)
+                return a;
+
+            return ((a - 0xD800) * 1024) + (b - 0xDC00) + 0x10000;
+        },
+
+        "@@iterator": function() {
+
+            assertThis(this, "String.prototype[Symbol.iterator]");
+            return new StringIterator(this);
+        },
+
+    });
+
+}
+
+exports.polyfill = polyfill;
+
+
+})(_M10);
+
+(function(exports) {
+
+var global = _M3.global;
+
+var symbols = _M4;
+var array = _M5;
+var mapset = _M6;
+var number = _M7;
+var object = _M8;
+var promise = _M9;
+var string = _M10;
+
+
+
+function polyfill() {
+
+    [symbols, array, mapset, number, object, promise, string]
+        .forEach(function(m) { return m.polyfill(global); });
+}
+
+exports.global = global;
+exports.polyfill = polyfill;
+
+
+})(_M2);
+
+(function(exports) {
+
+var polyfill = _M2.polyfill;
+
+polyfill();
+
+
+})(_M1);
+
+
+}, "");
+
+})();
+
+var __M; (function(a) { var list = Array(a.length / 2); __M = function require(i) { var m = list[i], f, e; if (typeof m !== 'function') return m.exports; f = m; m = i ? { exports: {} } : module || { exports: exports }; f(list[i] = m, e = m.exports); if (m.exports !== e && !('default' in m.exports)) m.exports['default'] = m.exports; return m.exports; }; for (var i = 0; i < a.length; i += 2) { var j = Math.abs(a[i]); list[j] = a[i + 1]; if (a[i] >= 0) __M(j); } })([
+1, function(m) { m.exports = require("fs") },
+2, function(m) { m.exports = require("path") },
+18, function(module, exports) {
 
 var HAS = Object.prototype.hasOwnProperty;
 
@@ -1723,9 +1743,8 @@ var ConsoleCommand = _esdown.class(function(__) { var ConsoleCommand;
 exports.ConsoleCommand = ConsoleCommand;
 
 
-})(_M19);
-
-(function(exports) {
+},
+19, function(module, exports) {
 
 
 var ConsoleIO = _esdown.class(function(__) { var ConsoleIO;
@@ -1795,9 +1814,8 @@ var ConsoleIO = _esdown.class(function(__) { var ConsoleIO;
 exports.ConsoleIO = ConsoleIO;
 
 
-})(_M20);
-
-(function(exports) {
+},
+20, function(module, exports) {
 
 var ConsoleStyle = {
 
@@ -1814,27 +1832,24 @@ var ConsoleStyle = {
 exports.ConsoleStyle = ConsoleStyle;
 
 
-})(_M21);
+},
+9, function(module, exports) {
 
-(function(exports) {
-
-Object.keys(_M19).forEach(function(k) { exports[k] = _M19[k]; });
-Object.keys(_M20).forEach(function(k) { exports[k] = _M20[k]; });
-Object.keys(_M21).forEach(function(k) { exports[k] = _M21[k]; });
-
-
-})(_M10);
-
-(function(exports) {
-
-Object.keys(_M10).forEach(function(k) { exports[k] = _M10[k]; });
+Object.keys(__M(18)).forEach(function(k) { exports[k] = __M(18)[k]; });
+Object.keys(__M(19)).forEach(function(k) { exports[k] = __M(19)[k]; });
+Object.keys(__M(20)).forEach(function(k) { exports[k] = __M(20)[k]; });
 
 
-})(_M4);
+},
+3, function(module, exports) {
 
-(function(exports) {
+Object.keys(__M(9)).forEach(function(k) { exports[k] = __M(9)[k]; });
 
-var FS = _M2;
+
+},
+4, function(module, exports) {
+
+var FS = __M(1);
 
 // Wraps a standard Node async function with a promise
 // generating function
@@ -1929,9 +1944,11 @@ exports.appendFile = appendFile;
 exports.realpath = realpath;
 
 
-})(_M5);
-
-(function(exports) {
+},
+10, function(m) { m.exports = require("repl") },
+11, function(m) { m.exports = require("vm") },
+12, function(m) { m.exports = require("util") },
+27, function(module, exports) {
 
 function Node(type, start, end) {
 
@@ -2772,9 +2789,8 @@ exports.ExportDefaultFrom = ExportDefaultFrom;
 exports.ExportSpecifier = ExportSpecifier;
 
 
-})(_M28);
-
-(function(exports) {
+},
+23, function(module, exports) {
 
 /*
 
@@ -2784,8 +2800,8 @@ functions and give them a common prototype property.
 
 */
 
-var Nodes = _M28;
-Object.keys(_M28).forEach(function(k) { exports[k] = _M28[k]; });
+var Nodes = __M(27);
+Object.keys(__M(27)).forEach(function(k) { exports[k] = __M(27)[k]; });
 
 function isNode(x) {
 
@@ -2826,9 +2842,8 @@ var NodeBase = _esdown.class(function(__) { var NodeBase; __({ constructor: Node
 Object.keys(Nodes).forEach(function(k) { return Nodes[k].prototype = NodeBase.prototype; });
 
 
-})(_M24);
-
-(function(exports) {
+},
+30, function(module, exports) {
 
 // Unicode 6.3.0 | 2013-09-25, 18:58:50 GMT [MD]
 
@@ -3595,11 +3610,10 @@ exports.IDENTIFIER = IDENTIFIER;
 exports.WHITESPACE = WHITESPACE;
 
 
-})(_M31);
+},
+28, function(module, exports) {
 
-(function(exports) {
-
-var IDENTIFIER = _M31.IDENTIFIER, WHITESPACE = _M31.WHITESPACE;
+var IDENTIFIER = __M(30).IDENTIFIER, WHITESPACE = __M(30).WHITESPACE;
 
 function binarySearch(table, val) {
 
@@ -3696,9 +3710,8 @@ exports.codePointAt = codePointAt;
 exports.codePointString = codePointString;
 
 
-})(_M29);
-
-(function(exports) {
+},
+29, function(module, exports) {
 
 // Performs a binary search on an array
 function binarySearch(array, val) {
@@ -3748,22 +3761,21 @@ var LineMap = _esdown.class(function(__) { var LineMap;
 exports.LineMap = LineMap;
 
 
-})(_M30);
+},
+24, function(module, exports) {
 
-(function(exports) {
-
-var isIdentifierStart = _M29.isIdentifierStart,
-    isIdentifierPart = _M29.isIdentifierPart,
-    isWhitespace = _M29.isWhitespace,
-    codePointLength = _M29.codePointLength,
-    codePointAt = _M29.codePointAt,
-    codePointString = _M29.codePointString;
-
+var isIdentifierStart = __M(28).isIdentifierStart,
+    isIdentifierPart = __M(28).isIdentifierPart,
+    isWhitespace = __M(28).isWhitespace,
+    codePointLength = __M(28).codePointLength,
+    codePointAt = __M(28).codePointAt,
+    codePointString = __M(28).codePointString;
 
 
 
 
-var LineMap = _M30.LineMap;
+
+var LineMap = __M(29).LineMap;
 
 var identifierEscape = /\\u([0-9a-fA-F]{4})/g,
       newlineSequence = /\r\n?|[\n\u2028\u2029]/g,
@@ -4782,12 +4794,11 @@ exports.isStrictReservedWord = isStrictReservedWord;
 exports.Scanner = Scanner;
 
 
-})(_M25);
+},
+25, function(module, exports) {
 
-(function(exports) {
-
-var AST = _M24;
-var isReservedWord = _M25.isReservedWord;
+var AST = __M(23);
+var isReservedWord = __M(24).isReservedWord;
 
 
 var Transform = _esdown.class(function(__) { var Transform; __({ constructor: Transform = function() {} });
@@ -4994,11 +5005,10 @@ var Transform = _esdown.class(function(__) { var Transform; __({ constructor: Tr
 exports.Transform = Transform;
 
 
-})(_M26);
+},
+26, function(module, exports) {
 
-(function(exports) {
-
-var isStrictReservedWord = _M25.isStrictReservedWord;
+var isStrictReservedWord = __M(24).isStrictReservedWord;
 
 
 // Returns true if the specified name is a restricted identifier in strict mode
@@ -5203,14 +5213,13 @@ var Validate = _esdown.class(function(__) { var Validate; __({ constructor: Vali
 exports.Validate = Validate;
 
 
-})(_M27);
+},
+21, function(module, exports) {
 
-(function(exports) {
-
-var AST = _M24;
-var Scanner = _M25.Scanner;
-var Transform = _M26.Transform;
-var Validate = _M27.Validate;
+var AST = __M(23);
+var Scanner = __M(24).Scanner;
+var Transform = __M(25).Transform;
+var Validate = __M(26).Validate;
 
 // Returns true if the specified operator is an increment operator
 function isIncrement(op) {
@@ -8040,9 +8049,8 @@ mixin(Parser, Transform, Validate);
 exports.Parser = Parser;
 
 
-})(_M22);
-
-(function(exports) {
+},
+22, function(module, exports) {
 
 // TODO:  How we deal with the insanity that is with statements?
 // TODO:  Param scopes have empty free lists, which is strange
@@ -8262,7 +8270,12 @@ var ScopeResolver = _esdown.class(function(__) { var ScopeResolver; __({ constru
             if (name === "let" && (kind === "let" || kind === "const"))
                 this.fail("Invalid binding identifier", node);
 
-            map[name] = record = { declarations: [], references: [] };
+            map[name] = record = {
+
+                declarations: [],
+                references: [],
+                const: kind === "const"
+            };
         }
 
         record.declarations.push(node);
@@ -8402,13 +8415,12 @@ var ScopeResolver = _esdown.class(function(__) { var ScopeResolver; __({ constru
 exports.ScopeResolver = ScopeResolver;
 
 
-})(_M23);
+},
+17, function(module, exports) {
 
-(function(exports) {
-
-var Parser = _M22.Parser;
-var ScopeResolver = _M23.ScopeResolver;
-var AST = _M24;
+var Parser = __M(21).Parser;
+var ScopeResolver = __M(22).ScopeResolver;
+var AST = __M(23);
 
 function addParentLinks(node) {
 
@@ -8444,33 +8456,36 @@ exports.AST = AST;
 exports.parse = parse;
 
 
-})(_M18);
+},
+8, function(module, exports) {
 
-(function(exports) {
-
-Object.keys(_M18).forEach(function(k) { exports[k] = _M18[k]; });
+Object.keys(__M(17)).forEach(function(k) { exports[k] = __M(17)[k]; });
 
 
-})(_M9);
-
-(function(exports) {
+},
+15, function(module, exports) {
 
 var Runtime = {};
 
 Runtime.API = 
 
-"const VERSION = \"0.9.13\";\n\
+"var VERSION = \"0.9.16\";\n\
 \n\
-const GLOBAL = (function() {\n\
+var GLOBAL = (function() {\n\
 \n\
     try { return global.global } catch (x) {}\n\
     try { return self.self } catch (x) {}\n\
     return null;\n\
 })();\n\
 \n\
+var ownNames = Object.getOwnPropertyNames,\n\
+      ownSymbols = Object.getOwnPropertySymbols,\n\
+      getDesc = Object.getOwnPropertyDescriptor,\n\
+      defineProp = Object.defineProperty;\n\
+\n\
 function toObject(val) {\n\
 \n\
-    if (val == null)\n\
+    if (val == null) // null or undefined\n\
         throw new TypeError(val + \" is not an object\");\n\
 \n\
     return Object(val);\n\
@@ -8479,126 +8494,69 @@ function toObject(val) {\n\
 // Iterates over the descriptors for each own property of an object\n\
 function forEachDesc(obj, fn) {\n\
 \n\
-    let names = Object.getOwnPropertyNames(obj);\n\
-\n\
-    for (let i = 0; i < names.length; ++i)\n\
-        fn(names[i], Object.getOwnPropertyDescriptor(obj, names[i]));\n\
-\n\
-    let getSymbols = Object.getOwnPropertySymbols;\n\
-\n\
-    if (getSymbols) {\n\
-\n\
-        names = getSymbols(obj);\n\
-\n\
-        for (let i = 0; i < names.length; ++i)\n\
-            fn(names[i], Object.getOwnPropertyDescriptor(obj, names[i]));\n\
-    }\n\
-\n\
-    return obj;\n\
+    ownNames(obj).forEach(function(name) { return fn(name, getDesc(obj, name)); });\n\
+    if (ownSymbols) ownSymbols(obj).forEach(function(name) { return fn(name, getDesc(obj, name)); });\n\
 }\n\
 \n\
 // Installs a property into an object, merging \"get\" and \"set\" functions\n\
-function mergeProperty(target, name, desc, enumerable) {\n\
+function mergeProp(target, name, desc, enumerable) {\n\
 \n\
     if (desc.get || desc.set) {\n\
 \n\
-        let d = { configurable: true };\n\
-        if (desc.get) d.get = desc.get;\n\
-        if (desc.set) d.set = desc.set;\n\
-        desc = d;\n\
+        var d$0 = { configurable: true };\n\
+        if (desc.get) d$0.get = desc.get;\n\
+        if (desc.set) d$0.set = desc.set;\n\
+        desc = d$0;\n\
     }\n\
 \n\
     desc.enumerable = enumerable;\n\
-    Object.defineProperty(target, name, desc);\n\
+    defineProp(target, name, desc);\n\
 }\n\
 \n\
 // Installs properties on an object, merging \"get\" and \"set\" functions\n\
-function mergeProperties(target, source, enumerable) {\n\
+function mergeProps(target, source, enumerable) {\n\
 \n\
-    forEachDesc(source, (name, desc) => mergeProperty(target, name, desc, enumerable));\n\
+    forEachDesc(source, function(name, desc) { return mergeProp(target, name, desc, enumerable); });\n\
 }\n\
 \n\
 // Builds a class\n\
-export function makeClass(base, def) {\n\
+function makeClass(def) {\n\
 \n\
-    let parent;\n\
-\n\
-    if (def === void 0) {\n\
-\n\
-        // If no base class is specified, then Object.prototype\n\
-        // is the parent prototype\n\
-        def = base;\n\
-        base = null;\n\
-        parent = Object.prototype;\n\
-\n\
-    } else if (base === null) {\n\
-\n\
-        // If the base is null, then then then the parent prototype is null\n\
-        parent = null;\n\
-\n\
-    } else if (typeof base === \"function\") {\n\
-\n\
-        parent = base.prototype;\n\
-\n\
-        // Prototype must be null or an object\n\
-        if (parent !== null && Object(parent) !== parent)\n\
-            parent = void 0;\n\
-    }\n\
-\n\
-    if (parent === void 0)\n\
-        throw new TypeError;\n\
-\n\
-    // Create the prototype object\n\
-    let proto = Object.create(parent),\n\
+    var parent = Object.prototype,\n\
+        proto = Object.create(parent),\n\
         statics = {};\n\
 \n\
-    function __(target, obj) {\n\
+    def(function(obj) { return mergeProps(proto, obj, false); },\n\
+        function(obj) { return mergeProps(statics, obj, false); });\n\
 \n\
-        if (!obj) mergeProperties(proto, target, false);\n\
-        else mergeProperties(target, obj, false);\n\
-    }\n\
-\n\
-    __.static = obj => mergeProperties(statics, obj, false);\n\
-    __.super = parent;\n\
-    __.csuper = base || Function.prototype;\n\
-\n\
-    // Generate method collections, closing over super bindings\n\
-    def(__);\n\
-\n\
-    let ctor = proto.constructor;\n\
-\n\
-    // Set constructor's prototype\n\
+    var ctor = proto.constructor;\n\
     ctor.prototype = proto;\n\
 \n\
     // Set class \"static\" methods\n\
-    forEachDesc(statics, (name, desc) => Object.defineProperty(ctor, name, desc));\n\
-\n\
-    // Inherit from base constructor\n\
-    if (base && ctor.__proto__)\n\
-        Object.setPrototypeOf(ctor, base);\n\
+    forEachDesc(statics, function(name, desc) { return defineProp(ctor, name, desc); });\n\
 \n\
     return ctor;\n\
 }\n\
 \n\
 // Support for computed property names\n\
-export function computed(target) {\n\
+function computed(target) {\n\
 \n\
-    for (let i = 1; i < arguments.length; i += 3) {\n\
+    for (var i$0 = 1; i$0 < arguments.length; i$0 += 3) {\n\
 \n\
-        let desc = Object.getOwnPropertyDescriptor(arguments[i + 1], \"_\");\n\
-        mergeProperty(target, arguments[i], desc, true);\n\
+        var desc$0 = getDesc(arguments[i$0 + 1], \"_\");\n\
+        mergeProp(target, arguments[i$0], desc$0, true);\n\
 \n\
-        if (i + 2 < arguments.length)\n\
-            mergeProperties(target, arguments[i + 2], true);\n\
+        if (i$0 + 2 < arguments.length)\n\
+            mergeProps(target, arguments[i$0 + 2], true);\n\
     }\n\
 \n\
     return target;\n\
 }\n\
 \n\
 // Support for async functions\n\
-export function asyncFunction(iter) {\n\
+function asyncFunction(iter) {\n\
 \n\
-    return new Promise((resolve, reject) => {\n\
+    return new Promise(function(resolve, reject) {\n\
 \n\
         resume(\"next\", void 0);\n\
 \n\
@@ -8606,17 +8564,17 @@ export function asyncFunction(iter) {\n\
 \n\
             try {\n\
 \n\
-                let result = iter[type](value);\n\
+                var result$0 = iter[type](value);\n\
 \n\
-                if (result.done) {\n\
+                if (result$0.done) {\n\
 \n\
-                    resolve(result.value);\n\
+                    resolve(result$0.value);\n\
 \n\
                 } else {\n\
 \n\
-                    Promise.resolve(result.value).then(\n\
-                        x => resume(\"next\", x),\n\
-                        x => resume(\"throw\", x));\n\
+                    Promise.resolve(result$0.value).then(\n\
+                        function(x) { return resume(\"next\", x); },\n\
+                        function(x) { return resume(\"throw\", x); });\n\
                 }\n\
 \n\
             } catch (x) { reject(x) }\n\
@@ -8625,15 +8583,15 @@ export function asyncFunction(iter) {\n\
 }\n\
 \n\
 // Support for async generators\n\
-export function asyncGenerator(iter) {\n\
+function asyncGenerator(iter) {\n\
 \n\
-    let front = null, back = null;\n\
+    var front = null, back = null;\n\
 \n\
-    let aIter = {\n\
+    var aIter = {\n\
 \n\
-        next(val) { return send(\"next\", val) },\n\
-        throw(val) { return send(\"throw\", val) },\n\
-        return(val) { return send(\"return\", val) },\n\
+        next: function(val) { return send(\"next\", val) },\n\
+        throw: function(val) { return send(\"throw\", val) },\n\
+        return: function(val) { return send(\"return\", val) },\n\
     };\n\
 \n\
     aIter[Symbol.asyncIterator] = function() { return this };\n\
@@ -8641,9 +8599,9 @@ export function asyncGenerator(iter) {\n\
 \n\
     function send(type, value) {\n\
 \n\
-        return new Promise((resolve, reject) => {\n\
+        return new Promise(function(resolve, reject) {\n\
 \n\
-            let x = { type, value, resolve, reject, next: null };\n\
+            var x = { type: type, value: value, resolve: resolve, reject: reject, next: null };\n\
 \n\
             if (back) {\n\
 \n\
@@ -8664,7 +8622,7 @@ export function asyncGenerator(iter) {\n\
         switch (type) {\n\
 \n\
             case \"return\":\n\
-                front.resolve({ value, done: true });\n\
+                front.resolve({ value: value, done: true });\n\
                 break;\n\
 \n\
             case \"throw\":\n\
@@ -8672,7 +8630,7 @@ export function asyncGenerator(iter) {\n\
                 break;\n\
 \n\
             default:\n\
-                front.resolve({ value, done: false });\n\
+                front.resolve({ value: value, done: false });\n\
                 break;\n\
         }\n\
 \n\
@@ -8684,7 +8642,7 @@ export function asyncGenerator(iter) {\n\
 \n\
     function awaitValue(result) {\n\
 \n\
-        let value = result.value;\n\
+        var value = result.value;\n\
 \n\
         if (typeof value === \"object\" && \"_esdown_await\" in value) {\n\
 \n\
@@ -8705,25 +8663,25 @@ export function asyncGenerator(iter) {\n\
         if (type === \"return\" && !(type in iter)) {\n\
 \n\
             type = \"throw\";\n\
-            value = { value, __return: true };\n\
+            value = { value: value, __return: true };\n\
         }\n\
 \n\
         try {\n\
 \n\
-            let result = iter[type](value),\n\
-                awaited = awaitValue(result);\n\
+            var result$1 = iter[type](value),\n\
+                awaited$0 = awaitValue(result$1);\n\
 \n\
-            if (awaited) {\n\
+            if (awaited$0) {\n\
 \n\
-                Promise.resolve(awaited).then(\n\
-                    x => resume(\"next\", x),\n\
-                    x => resume(\"throw\", x));\n\
+                Promise.resolve(awaited$0).then(\n\
+                    function(x) { return resume(\"next\", x); },\n\
+                    function(x) { return resume(\"throw\", x); });\n\
 \n\
             } else {\n\
 \n\
-                Promise.resolve(result.value).then(\n\
-                    x => fulfill(result.done ? \"return\" : \"normal\", x),\n\
-                    x => fulfill(\"throw\", x));\n\
+                Promise.resolve(result$1.value).then(\n\
+                    function(x) { return fulfill(result$1.done ? \"return\" : \"normal\", x); },\n\
+                    function(x) { return fulfill(\"throw\", x); });\n\
             }\n\
 \n\
         } catch (x) {\n\
@@ -8738,23 +8696,23 @@ export function asyncGenerator(iter) {\n\
 }\n\
 \n\
 // Support for spread operations\n\
-export function spread(initial) {\n\
+function spread(initial) {\n\
 \n\
     return {\n\
 \n\
         a: initial || [],\n\
 \n\
         // Add items\n\
-        s() {\n\
+        s: function() {\n\
 \n\
-            for (let i = 0; i < arguments.length; ++i)\n\
-                this.a.push(arguments[i]);\n\
+            for (var i$1 = 0; i$1 < arguments.length; ++i$1)\n\
+                this.a.push(arguments[i$1]);\n\
 \n\
             return this;\n\
         },\n\
 \n\
         // Add the contents of iterables\n\
-        i(list) {\n\
+        i: function(list) {\n\
 \n\
             if (Array.isArray(list)) {\n\
 \n\
@@ -8762,41 +8720,41 @@ export function spread(initial) {\n\
 \n\
             } else {\n\
 \n\
-                for (let item of list)\n\
-                    this.a.push(item);\n\
+                for (var __$0 = (list)[Symbol.iterator](), __$1; __$1 = __$0.next(), !__$1.done;)\n\
+                    { var item$0 = __$1.value; this.a.push(item$0); }\n\
             }\n\
 \n\
             return this;\n\
-        }\n\
+        },\n\
 \n\
     };\n\
 }\n\
 \n\
 // Support for object destructuring\n\
-export function objd(obj) {\n\
+function objd(obj) {\n\
 \n\
     return toObject(obj);\n\
 }\n\
 \n\
 // Support for array destructuring\n\
-export function arrayd(obj) {\n\
+function arrayd(obj) {\n\
 \n\
     if (Array.isArray(obj)) {\n\
 \n\
         return {\n\
 \n\
-            at(skip, pos) { return obj[pos] },\n\
-            rest(skip, pos) { return obj.slice(pos) }\n\
+            at: function(skip, pos) { return obj[pos] },\n\
+            rest: function(skip, pos) { return obj.slice(pos) },\n\
         };\n\
     }\n\
 \n\
-    let iter = toObject(obj)[Symbol.iterator]();\n\
+    var iter = toObject(obj)[Symbol.iterator]();\n\
 \n\
     return {\n\
 \n\
-        at(skip) {\n\
+        at: function(skip) {\n\
 \n\
-            let r;\n\
+            var r;\n\
 \n\
             while (skip--)\n\
                 r = iter.next();\n\
@@ -8804,9 +8762,9 @@ export function arrayd(obj) {\n\
             return r.value;\n\
         },\n\
 \n\
-        rest(skip) {\n\
+        rest: function(skip) {\n\
 \n\
-            let a = [], r;\n\
+            var a = [], r;\n\
 \n\
             while (--skip)\n\
                 r = iter.next();\n\
@@ -8815,63 +8773,74 @@ export function arrayd(obj) {\n\
                 a.push(r.value);\n\
 \n\
             return a;\n\
-        }\n\
+        },\n\
     };\n\
 }\n\
 \n\
-export {\n\
-    makeClass as class,\n\
-    VERSION as version,\n\
-    GLOBAL as global,\n\
-    asyncFunction as async,\n\
-    asyncGenerator as asyncGen,\n\
-};\n\
+\n\
+\n\
+\n\
+\n\
+\n\
+\n\
+\n\
+\n\
+exports.makeClass = makeClass;\n\
+exports.computed = computed;\n\
+exports.asyncFunction = asyncFunction;\n\
+exports.asyncGenerator = asyncGenerator;\n\
+exports.spread = spread;\n\
+exports.objd = objd;\n\
+exports.arrayd = arrayd;\n\
+exports.class = makeClass;\n\
+exports.version = VERSION;\n\
+exports.global = GLOBAL;\n\
+exports.async = asyncFunction;\n\
+exports.asyncGen = asyncGenerator;\n\
 ";
 
 Runtime.Polyfill = 
 
-"// === Polyfill Utilities ===\n\
+"/*=esdown=*/(function(fn, name) { if (typeof exports !== 'undefined') fn(require, exports, module); else if (typeof self !== 'undefined') fn(null, name === '*' ? self : (name ? self[name] = {} : {})); })(function(require, exports, module) { 'use strict'; var _M3 = {}, _M4 = {}, _M5 = {}, _M6 = {}, _M7 = {}, _M8 = {}, _M9 = {}, _M10 = {}, _M2 = {}, _M1 = exports;\n\
 \n\
-function eachKey(obj, fn) {\n\
+(function(exports) {\n\
 \n\
-    let keys = Object.getOwnPropertyNames(obj);\n\
+var Global = (function() {\n\
 \n\
-    for (let i = 0; i < keys.length; ++i)\n\
-        fn(keys[i]);\n\
+    try { return global.global } catch (x) {}\n\
+    try { return self.self } catch (x) {}\n\
+    return null;\n\
+})();\n\
 \n\
-    if (!Object.getOwnPropertySymbols)\n\
-        return;\n\
 \n\
-    keys = Object.getOwnPropertySymbols(obj);\n\
 \n\
-    for (let i = 0; i < keys.length; ++i)\n\
-        fn(keys[i]);\n\
+function transformKey(k) {\n\
+\n\
+    if (k.slice(0, 2) === \"@@\")\n\
+        k = Symbol[k.slice(2)];\n\
+\n\
+    return k;\n\
 }\n\
 \n\
-function polyfill(obj, methods) {\n\
+function addProperties(target, methods) {\n\
 \n\
-    eachKey(methods, key => {\n\
+    Object.keys(methods).forEach(function(k) {\n\
 \n\
-        if (key in obj)\n\
+        var desc = Object.getOwnPropertyDescriptor(methods, k);\n\
+        desc.enumerable = false;\n\
+\n\
+        k = transformKey(k);\n\
+\n\
+        if (k in target)\n\
             return;\n\
 \n\
-        Object.defineProperty(obj, key, {\n\
-\n\
-            value: methods[key],\n\
-            configurable: true,\n\
-            enumerable: false,\n\
-            writable: true\n\
-        });\n\
-\n\
+        Object.defineProperty(target, k, desc);\n\
     });\n\
 }\n\
 \n\
-\n\
-// === Spec Helpers ===\n\
-\n\
 var sign = Math.sign || function(val) {\n\
 \n\
-    let n = +val;\n\
+    var n = +val;\n\
 \n\
     if (n === 0 || Number.isNaN(n))\n\
         return n;\n\
@@ -8881,7 +8850,7 @@ var sign = Math.sign || function(val) {\n\
 \n\
 function toInteger(val) {\n\
 \n\
-    let n = +val;\n\
+    var n = +val;\n\
 \n\
     return n !== n /* n is NaN */ ? 0 :\n\
         (n === 0 || !isFinite(n)) ? n :\n\
@@ -8890,7 +8859,7 @@ function toInteger(val) {\n\
 \n\
 function toLength(val) {\n\
 \n\
-    let n = toInteger(val);\n\
+    var n = toInteger(val);\n\
     return n < 0 ? 0 : Math.min(n, Number.MAX_SAFE_INTEGER);\n\
 }\n\
 \n\
@@ -8921,308 +8890,87 @@ function assertThis(val, name) {\n\
         throw new TypeError(name + \" called on null or undefined\");\n\
 }\n\
 \n\
-// === Symbols ===\n\
+exports.global = Global;\n\
+exports.addProperties = addProperties;\n\
+exports.toInteger = toInteger;\n\
+exports.toLength = toLength;\n\
+exports.sameValue = sameValue;\n\
+exports.isRegExp = isRegExp;\n\
+exports.toObject = toObject;\n\
+exports.assertThis = assertThis;\n\
 \n\
-let symbolCounter = 0,\n\
-    global = _esdown.global;\n\
+\n\
+})(_M3);\n\
+\n\
+(function(exports) {\n\
+\n\
+var addProperties = _M3.addProperties;\n\
+\n\
+var symbolCounter = 0;\n\
 \n\
 function fakeSymbol() {\n\
 \n\
     return \"__$\" + Math.floor(Math.random() * 1e9) + \"$\" + (++symbolCounter) + \"$__\";\n\
 }\n\
 \n\
-if (!global.Symbol)\n\
-    global.Symbol = fakeSymbol;\n\
+function polyfill(global) {\n\
 \n\
-polyfill(Symbol, {\n\
+    if (!global.Symbol)\n\
+        global.Symbol = fakeSymbol;\n\
 \n\
-    iterator: Symbol(\"iterator\"),\n\
+    addProperties(Symbol, {\n\
 \n\
-    species: Symbol(\"species\"),\n\
+        iterator: Symbol(\"iterator\"),\n\
 \n\
-    // Experimental async iterator support\n\
-    asyncIterator: Symbol(\"asyncIterator\"),\n\
+        species: Symbol(\"species\"),\n\
 \n\
-});\n\
+        // Experimental async iterator support\n\
+        asyncIterator: Symbol(\"asyncIterator\"),\n\
 \n\
-// === Object ===\n\
-\n\
-polyfill(Object, {\n\
-\n\
-    is: sameValue,\n\
-\n\
-    assign(target, source) {\n\
-\n\
-        target = toObject(target);\n\
-\n\
-        for (let i = 1; i < arguments.length; ++i) {\n\
-\n\
-            source = arguments[i];\n\
-\n\
-            if (source != null) // null or undefined\n\
-                Object.keys(source).forEach(key => target[key] = source[key]);\n\
-        }\n\
-\n\
-        return target;\n\
-    },\n\
-\n\
-    setPrototypeOf(object, proto) {\n\
-\n\
-        // Least effort attempt\n\
-        object.__proto__ = proto;\n\
-    },\n\
-\n\
-    getOwnPropertySymbols() {\n\
-\n\
-        return [];\n\
-    }\n\
-\n\
-});\n\
-\n\
-// === Number ===\n\
-\n\
-function isInteger(val) {\n\
-\n\
-    return typeof val === \"number\" && isFinite(val) && toInteger(val) === val;\n\
-}\n\
-\n\
-function epsilon() {\n\
-\n\
-    // Calculate the difference between 1 and the smallest value greater than 1 that\n\
-    // is representable as a Number value\n\
-\n\
-    let result;\n\
-\n\
-    for (let next = 1; 1 + next !== 1; next = next / 2)\n\
-        result = next;\n\
-\n\
-    return result;\n\
-}\n\
-\n\
-polyfill(Number, {\n\
-\n\
-    EPSILON: epsilon(),\n\
-    MAX_SAFE_INTEGER: 9007199254740991,\n\
-    MIN_SAFE_INTEGER: -9007199254740991,\n\
-\n\
-    parseInt: parseInt,\n\
-    parseFloat: parseFloat,\n\
-    isInteger: isInteger,\n\
-    isFinite(val) { return typeof val === \"number\" && isFinite(val) },\n\
-    isNaN(val) { return val !== val },\n\
-    isSafeInteger(val) { return isInteger(val) && Math.abs(val) <= Number.MAX_SAFE_INTEGER }\n\
-\n\
-});\n\
-\n\
-// === String ===\n\
-\n\
-polyfill(String, {\n\
-\n\
-    raw(callsite, ...args) {\n\
-\n\
-        let raw = callsite.raw,\n\
-            len = toLength(raw.length);\n\
-\n\
-        if (len === 0)\n\
-            return \"\";\n\
-\n\
-        let s = \"\", i = 0;\n\
-\n\
-        while (true) {\n\
-\n\
-            s += raw[i];\n\
-            if (i + 1 === len || i >= args.length) break;\n\
-            s += args[i++];\n\
-        }\n\
-\n\
-        return s;\n\
-    },\n\
-\n\
-    fromCodePoint(...points) {\n\
-\n\
-        let out = [];\n\
-\n\
-        points.forEach(next => {\n\
-\n\
-            next = Number(next);\n\
-\n\
-            if (!sameValue(next, toInteger(next)) || next < 0 || next > 0x10ffff)\n\
-                throw new RangeError(\"Invalid code point \" + next);\n\
-\n\
-            if (next < 0x10000) {\n\
-\n\
-                out.push(String.fromCharCode(next));\n\
-\n\
-            } else {\n\
-\n\
-                next -= 0x10000;\n\
-                out.push(String.fromCharCode((next >> 10) + 0xD800));\n\
-                out.push(String.fromCharCode((next % 0x400) + 0xDC00));\n\
-            }\n\
-        });\n\
-\n\
-        return out.join(\"\");\n\
-    }\n\
-\n\
-});\n\
-\n\
-// Repeat a string by \"squaring\"\n\
-function repeat(s, n) {\n\
-\n\
-    if (n < 1) return \"\";\n\
-    if (n % 2) return repeat(s, n - 1) + s;\n\
-    let half = repeat(s, n / 2);\n\
-    return half + half;\n\
-}\n\
-\n\
-class StringIterator {\n\
-\n\
-    constructor(string) {\n\
-\n\
-        this.string = string;\n\
-        this.current = 0;\n\
-    }\n\
-\n\
-    next() {\n\
-\n\
-        let s = this.string,\n\
-            i = this.current,\n\
-            len = s.length;\n\
-\n\
-        if (i >= len) {\n\
-\n\
-            this.current = Infinity;\n\
-            return { value: void 0, done: true };\n\
-        }\n\
-\n\
-        let c = s.charCodeAt(i),\n\
-            chars = 1;\n\
-\n\
-        if (c >= 0xD800 && c <= 0xDBFF && i + 1 < s.length) {\n\
-\n\
-            c = s.charCodeAt(i + 1);\n\
-            chars = (c < 0xDC00 || c > 0xDFFF) ? 1 : 2;\n\
-        }\n\
-\n\
-        this.current += chars;\n\
-\n\
-        return { value: s.slice(i, this.current), done: false };\n\
-    }\n\
-\n\
-    [Symbol.iterator]() { return this }\n\
+    });\n\
 \n\
 }\n\
 \n\
-polyfill(String.prototype, {\n\
+exports.polyfill = polyfill;\n\
 \n\
-    repeat(count) {\n\
 \n\
-        assertThis(this, \"String.prototype.repeat\");\n\
+})(_M4);\n\
 \n\
-        let string = String(this);\n\
+(function(exports) {\n\
 \n\
-        count = toInteger(count);\n\
+var addProperties = _M3.addProperties, toObject = _M3.toObject, toLength = _M3.toLength, toInteger = _M3.toInteger;\n\
 \n\
-        if (count < 0 || count === Infinity)\n\
-            throw new RangeError(\"Invalid count value\");\n\
+function arrayFind(obj, pred, thisArg, type) {\n\
 \n\
-        return repeat(string, count);\n\
-    },\n\
+    var len = toLength(obj.length),\n\
+        val;\n\
 \n\
-    startsWith(search) {\n\
+    if (typeof pred !== \"function\")\n\
+        throw new TypeError(pred + \" is not a function\");\n\
 \n\
-        assertThis(this, \"String.prototype.startsWith\");\n\
+    for (var i$0 = 0; i$0 < len; ++i$0) {\n\
 \n\
-        if (isRegExp(search))\n\
-            throw new TypeError(\"First argument to String.prototype.startsWith must not be a regular expression\");\n\
+        val = obj[i$0];\n\
 \n\
-        let string = String(this);\n\
-\n\
-        search = String(search);\n\
-\n\
-        let pos = arguments.length > 1 ? arguments[1] : undefined,\n\
-            start = Math.max(toInteger(pos), 0);\n\
-\n\
-        return string.slice(start, start + search.length) === search;\n\
-    },\n\
-\n\
-    endsWith(search) {\n\
-\n\
-        assertThis(this, \"String.prototype.endsWith\");\n\
-\n\
-        if (isRegExp(search))\n\
-            throw new TypeError(\"First argument to String.prototype.endsWith must not be a regular expression\");\n\
-\n\
-        let string = String(this);\n\
-\n\
-        search = String(search);\n\
-\n\
-        let len = string.length,\n\
-            arg = arguments.length > 1 ? arguments[1] : undefined,\n\
-            pos = arg === undefined ? len : toInteger(arg),\n\
-            end = Math.min(Math.max(pos, 0), len);\n\
-\n\
-        return string.slice(end - search.length, end) === search;\n\
-    },\n\
-\n\
-    contains(search) {\n\
-\n\
-        assertThis(this, \"String.prototype.contains\");\n\
-\n\
-        let string = String(this),\n\
-            pos = arguments.length > 1 ? arguments[1] : undefined;\n\
-\n\
-        // Somehow this trick makes method 100% compat with the spec\n\
-        return string.indexOf(search, pos) !== -1;\n\
-    },\n\
-\n\
-    codePointAt(pos) {\n\
-\n\
-        assertThis(this, \"String.prototype.codePointAt\");\n\
-\n\
-        let string = String(this),\n\
-            len = string.length;\n\
-\n\
-        pos = toInteger(pos);\n\
-\n\
-        if (pos < 0 || pos >= len)\n\
-            return undefined;\n\
-\n\
-        let a = string.charCodeAt(pos);\n\
-\n\
-        if (a < 0xD800 || a > 0xDBFF || pos + 1 === len)\n\
-            return a;\n\
-\n\
-        let b = string.charCodeAt(pos + 1);\n\
-\n\
-        if (b < 0xDC00 || b > 0xDFFF)\n\
-            return a;\n\
-\n\
-        return ((a - 0xD800) * 1024) + (b - 0xDC00) + 0x10000;\n\
-    },\n\
-\n\
-    [Symbol.iterator]() {\n\
-\n\
-        assertThis(this, \"String.prototype[Symbol.iterator]\");\n\
-        return new StringIterator(this);\n\
+        if (pred.call(thisArg, val, i$0, obj))\n\
+            return type === \"value\" ? val : i$0;\n\
     }\n\
 \n\
-});\n\
+    return type === \"value\" ? void 0 : -1;\n\
+}\n\
 \n\
-// === Array ===\n\
+function ArrayIterator(array, kind) {\n\
 \n\
-class ArrayIterator {\n\
+    this.array = array;\n\
+    this.current = 0;\n\
+    this.kind = kind;\n\
+}\n\
 \n\
-    constructor(array, kind) {\n\
+addProperties(ArrayIterator.prototype = {}, {\n\
 \n\
-        this.array = array;\n\
-        this.current = 0;\n\
-        this.kind = kind;\n\
-    }\n\
+    next: function() {\n\
 \n\
-    next() {\n\
-\n\
-        let length = toLength(this.array.length),\n\
+        var length = toLength(this.array.length),\n\
             index = this.current;\n\
 \n\
         if (index >= length) {\n\
@@ -9244,216 +8992,205 @@ class ArrayIterator {\n\
             default:\n\
                 return { value: index, done: false };\n\
         }\n\
-    }\n\
+    },\n\
 \n\
-    [Symbol.iterator]() { return this }\n\
+    \"@@iterator\": function() { return this },\n\
+    \n\
+});\n\
 \n\
-}\n\
+function polyfill() {\n\
 \n\
-polyfill(Array, {\n\
+    addProperties(Array, {\n\
 \n\
-    from(list) {\n\
+        from: function(list) {\n\
 \n\
-        list = toObject(list);\n\
+            list = toObject(list);\n\
 \n\
-        let ctor = typeof this === \"function\" ? this : Array, // TODO: Always use \"this\"?\n\
-            map = arguments[1],\n\
-            thisArg = arguments[2],\n\
-            i = 0,\n\
-            out;\n\
+            var ctor = typeof this === \"function\" ? this : Array, // TODO: Always use \"this\"?\n\
+                map = arguments[1],\n\
+                thisArg = arguments[2],\n\
+                i = 0,\n\
+                out;\n\
 \n\
-        if (map !== void 0 && typeof map !== \"function\")\n\
-            throw new TypeError(map + \" is not a function\");\n\
+            if (map !== void 0 && typeof map !== \"function\")\n\
+                throw new TypeError(map + \" is not a function\");\n\
 \n\
-        var getIter = list[Symbol.iterator];\n\
+            var getIter = list[Symbol.iterator];\n\
 \n\
-        if (getIter) {\n\
+            if (getIter) {\n\
 \n\
-            let iter = getIter.call(list),\n\
-                result;\n\
+                var iter$0 = getIter.call(list),\n\
+                    result$0;\n\
 \n\
-            out = new ctor;\n\
+                out = new ctor;\n\
 \n\
-            while (result = iter.next(), !result.done) {\n\
+                while (result$0 = iter$0.next(), !result$0.done) {\n\
 \n\
-                out[i++] = map ? map.call(thisArg, result.value, i) : result.value;\n\
-                out.length = i;\n\
+                    out[i++] = map ? map.call(thisArg, result$0.value, i) : result$0.value;\n\
+                    out.length = i;\n\
+                }\n\
+\n\
+            } else {\n\
+\n\
+                var len$0 = toLength(list.length);\n\
+\n\
+                out = new ctor(len$0);\n\
+\n\
+                for (; i < len$0; ++i)\n\
+                    out[i] = map ? map.call(thisArg, list[i], i) : list[i];\n\
+\n\
+                out.length = len$0;\n\
             }\n\
 \n\
-        } else {\n\
+            return out;\n\
+        },\n\
 \n\
-            let len = toLength(list.length);\n\
+        of: function() { for (var items = [], __$0 = 0; __$0 < arguments.length; ++__$0) items.push(arguments[__$0]); \n\
 \n\
-            out = new ctor(len);\n\
+            var ctor = typeof this === \"function\" ? this : Array;\n\
 \n\
-            for (; i < len; ++i)\n\
-                out[i] = map ? map.call(thisArg, list[i], i) : list[i];\n\
+            if (ctor === Array)\n\
+                return items;\n\
+\n\
+            var len = items.length,\n\
+                out = new ctor(len);\n\
+\n\
+            for (var i$1 = 0; i$1 < len; ++i$1)\n\
+                out[i$1] = items[i$1];\n\
 \n\
             out.length = len;\n\
+\n\
+            return out;\n\
         }\n\
 \n\
-        return out;\n\
-    },\n\
+    });\n\
 \n\
-    of(...items) {\n\
+    addProperties(Array.prototype, {\n\
 \n\
-        let ctor = typeof this === \"function\" ? this : Array;\n\
+        copyWithin: function(target, start) {\n\
 \n\
-        if (ctor === Array)\n\
-            return items;\n\
+            var obj = toObject(this),\n\
+                len = toLength(obj.length),\n\
+                end = arguments[2];\n\
 \n\
-        let len = items.length,\n\
-            out = new ctor(len);\n\
+            target = toInteger(target);\n\
+            start = toInteger(start);\n\
 \n\
-        for (let i = 0; i < len; ++i)\n\
-            out[i] = items[i];\n\
+            var to = target < 0 ? Math.max(len + target, 0) : Math.min(target, len),\n\
+                from = start < 0 ? Math.max(len + start, 0) : Math.min(start, len);\n\
 \n\
-        out.length = len;\n\
+            end = end !== void 0 ? toInteger(end) : len;\n\
+            end = end < 0 ? Math.max(len + end, 0) : Math.min(end, len);\n\
 \n\
-        return out;\n\
-    }\n\
+            var count = Math.min(end - from, len - to),\n\
+                dir = 1;\n\
 \n\
-});\n\
+            if (from < to && to < from + count) {\n\
 \n\
-function arrayFind(obj, pred, thisArg, type) {\n\
+                dir = -1;\n\
+                from += count - 1;\n\
+                to += count - 1;\n\
+            }\n\
 \n\
-    let len = toLength(obj.length),\n\
-        val;\n\
+            for (; count > 0; --count) {\n\
 \n\
-    if (typeof pred !== \"function\")\n\
-        throw new TypeError(pred + \" is not a function\");\n\
+                if (from in obj) obj[to] = obj[from];\n\
+                else delete obj[to];\n\
 \n\
-    for (let i = 0; i < len; ++i) {\n\
+                from += dir;\n\
+                to += dir;\n\
+            }\n\
 \n\
-        val = obj[i];\n\
+            return obj;\n\
+        },\n\
 \n\
-        if (pred.call(thisArg, val, i, obj))\n\
-            return type === \"value\" ? val : i;\n\
-    }\n\
+        fill: function(value) {\n\
 \n\
-    return type === \"value\" ? void 0 : -1;\n\
+            var obj = toObject(this),\n\
+                len = toLength(obj.length),\n\
+                start = toInteger(arguments[1]),\n\
+                pos = start < 0 ? Math.max(len + start, 0) : Math.min(start, len),\n\
+                end = arguments.length > 2 ? toInteger(arguments[2]) : len;\n\
+\n\
+            end = end < 0 ? Math.max(len + end, 0) : Math.min(end, len);\n\
+\n\
+            for (; pos < end; ++pos)\n\
+                obj[pos] = value;\n\
+\n\
+            return obj;\n\
+        },\n\
+\n\
+        find: function(pred) {\n\
+\n\
+            return arrayFind(toObject(this), pred, arguments[1], \"value\");\n\
+        },\n\
+\n\
+        findIndex: function(pred) {\n\
+\n\
+            return arrayFind(toObject(this), pred, arguments[1], \"index\");\n\
+        },\n\
+\n\
+        values: function() { return new ArrayIterator(this, \"values\") },\n\
+\n\
+        entries: function() { return new ArrayIterator(this, \"entries\") },\n\
+\n\
+        keys: function() { return new ArrayIterator(this, \"keys\") },\n\
+\n\
+        \"@@iterator\": function() { return this.values() },\n\
+\n\
+    });\n\
+\n\
 }\n\
 \n\
-polyfill(Array.prototype, {\n\
+exports.polyfill = polyfill;\n\
 \n\
-    copyWithin(target, start) {\n\
 \n\
-        let obj = toObject(this),\n\
-            len = toLength(obj.length),\n\
-            end = arguments[2];\n\
+})(_M5);\n\
 \n\
-        target = toInteger(target);\n\
-        start = toInteger(start);\n\
+(function(exports) {\n\
 \n\
-        let to = target < 0 ? Math.max(len + target, 0) : Math.min(target, len),\n\
-            from = start < 0 ? Math.max(len + start, 0) : Math.min(start, len);\n\
+var addProperties = _M3.addProperties;\n\
 \n\
-        end = end !== void 0 ? toInteger(end) : len;\n\
-        end = end < 0 ? Math.max(len + end, 0) : Math.min(end, len);\n\
+var ORIGIN = {}, REMOVED = {};\n\
 \n\
-        let count = Math.min(end - from, len - to),\n\
-            dir = 1;\n\
+function MapNode(key, val) {\n\
 \n\
-        if (from < to && to < from + count) {\n\
+    this.key = key;\n\
+    this.value = val;\n\
+    this.prev = this;\n\
+    this.next = this;\n\
+}\n\
 \n\
-            dir = -1;\n\
-            from += count - 1;\n\
-            to += count - 1;\n\
-        }\n\
+addProperties(MapNode.prototype, {\n\
 \n\
-        for (; count > 0; --count) {\n\
-\n\
-            if (from in obj) obj[to] = obj[from];\n\
-            else delete obj[to];\n\
-\n\
-            from += dir;\n\
-            to += dir;\n\
-        }\n\
-\n\
-        return obj;\n\
-    },\n\
-\n\
-    fill(value) {\n\
-\n\
-        let obj = toObject(this),\n\
-            len = toLength(obj.length),\n\
-            start = toInteger(arguments[1]),\n\
-            pos = start < 0 ? Math.max(len + start, 0) : Math.min(start, len),\n\
-            end = arguments.length > 2 ? toInteger(arguments[2]) : len;\n\
-\n\
-        end = end < 0 ? Math.max(len + end, 0) : Math.min(end, len);\n\
-\n\
-        for (; pos < end; ++pos)\n\
-            obj[pos] = value;\n\
-\n\
-        return obj;\n\
-    },\n\
-\n\
-    find(pred) {\n\
-\n\
-        return arrayFind(toObject(this), pred, arguments[1], \"value\");\n\
-    },\n\
-\n\
-    findIndex(pred) {\n\
-\n\
-        return arrayFind(toObject(this), pred, arguments[1], \"index\");\n\
-    },\n\
-\n\
-    values()  { return new ArrayIterator(this, \"values\") },\n\
-\n\
-    entries() { return new ArrayIterator(this, \"entries\") },\n\
-\n\
-    keys()    { return new ArrayIterator(this, \"keys\") },\n\
-\n\
-    [Symbol.iterator]() { return this.values() }\n\
-\n\
-});\n\
-";
-
-Runtime.MapSet = 
-
-"let global = _esdown.global,\n\
-    ORIGIN = {},\n\
-    REMOVED = {};\n\
-\n\
-class MapNode {\n\
-\n\
-    constructor(key, val) {\n\
-\n\
-        this.key = key;\n\
-        this.value = val;\n\
-        this.prev = this;\n\
-        this.next = this;\n\
-    }\n\
-\n\
-    insert(next) {\n\
+    insert: function(next) {\n\
 \n\
         this.next = next;\n\
         this.prev = next.prev;\n\
         this.prev.next = this;\n\
         this.next.prev = this;\n\
-    }\n\
+    },\n\
 \n\
-    remove() {\n\
+    remove: function() {\n\
 \n\
         this.prev.next = this.next;\n\
         this.next.prev = this.prev;\n\
         this.key = REMOVED;\n\
-    }\n\
+    },\n\
 \n\
+});\n\
+\n\
+function MapIterator(node, kind) {\n\
+\n\
+    this.current = node;\n\
+    this.kind = kind;\n\
 }\n\
 \n\
-class MapIterator {\n\
+addProperties(MapIterator.prototype = {}, {\n\
 \n\
-    constructor(node, kind) {\n\
+    next: function() {\n\
 \n\
-        this.current = node;\n\
-        this.kind = kind;\n\
-    }\n\
-\n\
-    next() {\n\
-\n\
-        let node = this.current;\n\
+        var node = this.current;\n\
 \n\
         while (node.key === REMOVED)\n\
             node = this.current = this.current.next;\n\
@@ -9474,10 +9211,11 @@ class MapIterator {\n\
             default:\n\
                 return { value: node.key, done: false };\n\
         }\n\
-    }\n\
+    },\n\
 \n\
-    [Symbol.iterator]() { return this }\n\
-}\n\
+    \"@@iterator\": function() { return this },\n\
+\n\
+});\n\
 \n\
 function hashKey(key) {\n\
 \n\
@@ -9490,29 +9228,29 @@ function hashKey(key) {\n\
     throw new TypeError(\"Map and Set keys must be strings or numbers in esdown\");\n\
 }\n\
 \n\
-class Map {\n\
+function Map() {\n\
 \n\
-    constructor() {\n\
+    if (arguments.length > 0)\n\
+        throw new Error(\"Arguments to Map constructor are not supported in esdown\");\n\
 \n\
-        if (arguments.length > 0)\n\
-            throw new Error(\"Arguments to Map constructor are not supported in esdown\");\n\
+    this._index = {};\n\
+    this._origin = new MapNode(ORIGIN);\n\
+}\n\
+\n\
+addProperties(Map.prototype, {\n\
+\n\
+    clear: function() {\n\
+\n\
+        for (var node$0 = this._origin.next; node$0 !== this._origin; node$0 = node$0.next)\n\
+            node$0.key = REMOVED;\n\
 \n\
         this._index = {};\n\
         this._origin = new MapNode(ORIGIN);\n\
-    }\n\
+    },\n\
 \n\
-    clear() {\n\
+    delete: function(key) {\n\
 \n\
-        for (let node = this._origin.next; node !== this._origin; node = node.next)\n\
-            node.key = REMOVED;\n\
-\n\
-        this._index = {};\n\
-        this._origin = new MapNode(ORIGIN);\n\
-    }\n\
-\n\
-    delete(key) {\n\
-\n\
-        let h = hashKey(key),\n\
+        var h = hashKey(key),\n\
             node = this._index[h];\n\
 \n\
         if (node) {\n\
@@ -9523,36 +9261,36 @@ class Map {\n\
         }\n\
 \n\
         return false;\n\
-    }\n\
+    },\n\
 \n\
-    forEach(fn) {\n\
+    forEach: function(fn) {\n\
 \n\
-        let thisArg = arguments[1];\n\
+        var thisArg = arguments[1];\n\
 \n\
         if (typeof fn !== \"function\")\n\
             throw new TypeError(fn + \" is not a function\");\n\
 \n\
-        for (let node = this._origin.next; node.key !== ORIGIN; node = node.next)\n\
-            if (node.key !== REMOVED)\n\
-                fn.call(thisArg, node.value, node.key, this);\n\
-    }\n\
+        for (var node$1 = this._origin.next; node$1.key !== ORIGIN; node$1 = node$1.next)\n\
+            if (node$1.key !== REMOVED)\n\
+                fn.call(thisArg, node$1.value, node$1.key, this);\n\
+    },\n\
 \n\
-    get(key) {\n\
+    get: function(key) {\n\
 \n\
-        let h = hashKey(key),\n\
+        var h = hashKey(key),\n\
             node = this._index[h];\n\
 \n\
         return node ? node.value : void 0;\n\
-    }\n\
+    },\n\
 \n\
-    has(key) {\n\
+    has: function(key) {\n\
 \n\
         return hashKey(key) in this._index;\n\
-    }\n\
+    },\n\
 \n\
-    set(key, val) {\n\
+    set: function(key, val) {\n\
 \n\
-        let h = hashKey(key),\n\
+        var h = hashKey(key),\n\
             node = this._index[h];\n\
 \n\
         if (node) {\n\
@@ -9565,461 +9303,770 @@ class Map {\n\
 \n\
         this._index[h] = node;\n\
         node.insert(this._origin);\n\
-    }\n\
+    },\n\
 \n\
     get size() {\n\
 \n\
         return Object.keys(this._index).length;\n\
-    }\n\
+    },\n\
 \n\
-    keys() { return new MapIterator(this._origin.next, \"keys\") }\n\
-    values() { return new MapIterator(this._origin.next, \"values\") }\n\
-    entries() { return new MapIterator(this._origin.next, \"entries\") }\n\
+    keys: function() { return new MapIterator(this._origin.next, \"keys\") },\n\
+    values: function() { return new MapIterator(this._origin.next, \"values\") },\n\
+    entries: function() { return new MapIterator(this._origin.next, \"entries\") },\n\
 \n\
-    [Symbol.iterator]() { return new MapIterator(this._origin.next, \"entries\") }\n\
+    \"@@iterator\": function() { return new MapIterator(this._origin.next, \"entries\") },\n\
 \n\
+});\n\
+\n\
+var mapSet = Map.prototype.set;\n\
+\n\
+function Set() {\n\
+\n\
+    if (arguments.length > 0)\n\
+        throw new Error(\"Arguments to Set constructor are not supported in esdown\");\n\
+\n\
+    this._index = {};\n\
+    this._origin = new MapNode(ORIGIN);\n\
 }\n\
 \n\
-let mapSet = Map.prototype.set;\n\
+addProperties(Set.prototype, {\n\
 \n\
-class Set {\n\
+    add: function(key) { return mapSet.call(this, key, key) },\n\
+    \"@@iterator\": function() { return new MapIterator(this._origin.next, \"entries\") },\n\
 \n\
-    constructor() {\n\
-\n\
-        if (arguments.length > 0)\n\
-            throw new Error(\"Arguments to Set constructor are not supported in esdown\");\n\
-\n\
-        this._index = {};\n\
-        this._origin = new MapNode(ORIGIN);\n\
-    }\n\
-\n\
-    add(key) { return mapSet.call(this, key, key) }\n\
-\n\
-    [Symbol.iterator]() { return new MapIterator(this._origin.next, \"entries\") }\n\
-\n\
-}\n\
+});\n\
 \n\
 // Copy shared prototype members to Set\n\
-[\"clear\", \"delete\", \"forEach\", \"has\", \"size\", \"keys\", \"values\", \"entries\"].forEach(k => {\n\
+[\"clear\", \"delete\", \"forEach\", \"has\", \"size\", \"keys\", \"values\", \"entries\"].forEach(function(k) {\n\
 \n\
-    let d = Object.getOwnPropertyDescriptor(Map.prototype, k);\n\
+    var d = Object.getOwnPropertyDescriptor(Map.prototype, k);\n\
     Object.defineProperty(Set.prototype, k, d);\n\
 });\n\
 \n\
-if (!global.Map || !global.Map.prototype.entries) {\n\
+function polyfill(global) {\n\
 \n\
-    global.Map = Map;\n\
-    global.Set = Set;\n\
+    if (!global.Map || !global.Map.prototype.entries) {\n\
+\n\
+        global.Map = Map;\n\
+        global.Set = Set;\n\
+    }\n\
 }\n\
-";
-
-Runtime.Promise = 
-
-"(function() { \"use strict\";\n\
 \n\
-// Find global variable and exit if Promise is defined on it\n\
+exports.polyfill = polyfill;\n\
 \n\
-var Global = (function() {\n\
-    try { return self.self } catch (x) {}\n\
-    try { return global.global } catch (x) {}\n\
-    return null;\n\
-})();\n\
 \n\
-if (!Global || typeof Global.Promise === \"function\")\n\
-    return;\n\
+})(_M6);\n\
 \n\
-// Create an efficient microtask queueing mechanism\n\
+(function(exports) {\n\
 \n\
-var runLater = (function() {\n\
+var toInteger = _M3.toInteger, addProperties = _M3.addProperties;\n\
+\n\
+function isInteger(val) {\n\
+\n\
+    return typeof val === \"number\" && isFinite(val) && toInteger(val) === val;\n\
+}\n\
+\n\
+function epsilon() {\n\
+\n\
+    // Calculate the difference between 1 and the smallest value greater than 1 that\n\
+    // is representable as a Number value\n\
+\n\
+    var result;\n\
+\n\
+    for (var next$0 = 1; 1 + next$0 !== 1; next$0 = next$0 / 2)\n\
+        result = next$0;\n\
+\n\
+    return result;\n\
+}\n\
+\n\
+function polyfill() {\n\
+\n\
+    addProperties(Number, {\n\
+\n\
+        EPSILON: epsilon(),\n\
+        MAX_SAFE_INTEGER: 9007199254740991,\n\
+        MIN_SAFE_INTEGER: -9007199254740991,\n\
+\n\
+        parseInt: parseInt,\n\
+        parseFloat: parseFloat,\n\
+        isInteger: isInteger,\n\
+        isFinite: function(val) { return typeof val === \"number\" && isFinite(val) },\n\
+        isNaN: function(val) { return val !== val },\n\
+        isSafeInteger: function(val) { return isInteger(val) && Math.abs(val) <= Number.MAX_SAFE_INTEGER }\n\
+\n\
+    });\n\
+}\n\
+\n\
+exports.polyfill = polyfill;\n\
+\n\
+\n\
+})(_M7);\n\
+\n\
+(function(exports) {\n\
+\n\
+var addProperties = _M3.addProperties, toObject = _M3.toObject, sameValue = _M3.sameValue;\n\
+\n\
+function polyfill() {\n\
+\n\
+    addProperties(Object, {\n\
+\n\
+        is: sameValue,\n\
+\n\
+        assign: function(target, source) {\n\
+\n\
+            target = toObject(target);\n\
+\n\
+            for (var i$0 = 1; i$0 < arguments.length; ++i$0) {\n\
+\n\
+                source = arguments[i$0];\n\
+\n\
+                if (source != null) // null or undefined\n\
+                    Object.keys(source).forEach(function(key) { return target[key] = source[key]; });\n\
+            }\n\
+\n\
+            return target;\n\
+        },\n\
+\n\
+        setPrototypeOf: function(object, proto) {\n\
+\n\
+            // Least effort attempt\n\
+            object.__proto__ = proto;\n\
+        },\n\
+\n\
+        getOwnPropertySymbols: function() {\n\
+\n\
+            return [];\n\
+        },\n\
+\n\
+    });\n\
+\n\
+}\n\
+\n\
+exports.polyfill = polyfill;\n\
+\n\
+\n\
+})(_M8);\n\
+\n\
+(function(exports) {\n\
+\n\
+var addProperties = _M3.addProperties, global = _M3.global;\n\
+\n\
+var runLater = (function(_) {\n\
+\n\
     // Node\n\
-    if (Global.process && typeof process.version === \"string\") {\n\
-        return Global.setImmediate ?\n\
-            function(fn) { setImmediate(fn); } :\n\
-            function(fn) { process.nextTick(fn); };\n\
+    if (global.process && typeof process.version === \"string\") {\n\
+        return global.setImmediate ?\n\
+            function(fn) { setImmediate(fn) } :\n\
+            function(fn) { process.nextTick(fn) };\n\
     }\n\
 \n\
     // Newish Browsers\n\
-    var Observer = Global.MutationObserver || Global.WebKitMutationObserver;\n\
+    var Observer = global.MutationObserver || global.WebKitMutationObserver;\n\
 \n\
     if (Observer) {\n\
-        var div = document.createElement(\"div\"),\n\
-            queuedFn = void 0;\n\
 \n\
-        var observer = new Observer(function() {\n\
-            var fn = queuedFn;\n\
-            queuedFn = void 0;\n\
+        var div$0 = document.createElement(\"div\"),\n\
+            queuedFn$0 = null;\n\
+\n\
+        var observer$0 = new Observer(function(_) {\n\
+            var fn = queuedFn$0;\n\
+            queuedFn$0 = null;\n\
             fn();\n\
         });\n\
 \n\
-        observer.observe(div, { attributes: true });\n\
+        observer$0.observe(div$0, { attributes: true });\n\
 \n\
         return function(fn) {\n\
-            if (queuedFn !== void 0)\n\
+\n\
+            if (queuedFn$0 !== null)\n\
                 throw new Error(\"Only one function can be queued at a time\");\n\
-            queuedFn = fn;\n\
-            div.classList.toggle(\"x\");\n\
+\n\
+            queuedFn$0 = fn;\n\
+            div$0.classList.toggle(\"x\");\n\
         };\n\
     }\n\
 \n\
     // Fallback\n\
-    return function(fn) { setTimeout(fn, 0); };\n\
+    return function(fn) { setTimeout(fn, 0) };\n\
+\n\
 })();\n\
 \n\
-var EnqueueMicrotask = (function() {\n\
-    var queue = null;\n\
+var taskQueue = null;\n\
 \n\
-    function flush() {\n\
-        var q = queue;\n\
-        queue = null;\n\
-        for (var i = 0; i < q.length; ++i)\n\
-            q[i]();\n\
+function flushQueue() {\n\
+\n\
+    var q = taskQueue;\n\
+    taskQueue = null;\n\
+\n\
+    for (var i$0 = 0; i$0 < q.length; ++i$0)\n\
+        q[i$0]();\n\
+}\n\
+\n\
+function enqueueMicrotask(fn) {\n\
+\n\
+    // fn must not throw\n\
+    if (!taskQueue) {\n\
+        taskQueue = [];\n\
+        runLater(flushQueue);\n\
     }\n\
 \n\
-    return function PromiseEnqueueMicrotask(fn) {\n\
-        // fn must not throw\n\
-        if (!queue) {\n\
-            queue = [];\n\
-            runLater(flush);\n\
-        }\n\
-        queue.push(fn);\n\
-    };\n\
-})();\n\
+    taskQueue.push(fn);\n\
+}\n\
 \n\
-// Mock V8 internal functions and vars\n\
+var OPTIMIZED = {};\n\
+var PENDING = 0;\n\
+var RESOLVED = +1;\n\
+var REJECTED = -1;\n\
 \n\
-function SET_PRIVATE(obj, prop, val) { obj[prop] = val; }\n\
-function GET_PRIVATE(obj, prop) { return obj[prop]; }\n\
-function IS_SPEC_FUNCTION(obj) { return typeof obj === \"function\"; }\n\
-function IS_SPEC_OBJECT(obj) { return obj === Object(obj); }\n\
-function HAS_DEFINED_PRIVATE(obj, prop) { return prop in obj; }\n\
-function IS_UNDEFINED(x) { return x === void 0; }\n\
-function MakeTypeError(msg) { return new TypeError(msg); }\n\
+function idResolveHandler(x) { return x }\n\
+function idRejectHandler(r) { throw r }\n\
+function noopResolver() { }\n\
 \n\
-// In IE8 Object.defineProperty only works on DOM nodes, and defineProperties does not exist\n\
-var _defineProperty = Object.defineProperties && Object.defineProperty;\n\
+function Promise(resolver) { var __this = this; \n\
 \n\
-function AddNamedProperty(target, name, value) {\n\
-    if (!_defineProperty) {\n\
-        target[name] = value;\n\
+    this._status = PENDING;\n\
+\n\
+    // Optimized case to avoid creating an uneccessary closure.  Creator assumes\n\
+    // responsibility for setting initial state.\n\
+    if (resolver === OPTIMIZED)\n\
         return;\n\
+\n\
+    if (typeof resolver !== \"function\")\n\
+        throw new TypeError(\"Resolver is not a function\");\n\
+\n\
+    this._onResolve = [];\n\
+    this._onReject = [];\n\
+\n\
+    try { resolver(function(x) { resolvePromise(__this, x) }, function(r) { rejectPromise(__this, r) }) }\n\
+    catch (e) { rejectPromise(this, e) }\n\
+}\n\
+\n\
+function chain(promise, onResolve, onReject) { if (onResolve === void 0) onResolve = idResolveHandler; if (onReject === void 0) onReject = idRejectHandler; \n\
+\n\
+    var deferred = makeDeferred(promise.constructor);\n\
+\n\
+    switch (promise._status) {\n\
+\n\
+        case PENDING:\n\
+            promise._onResolve.push(onResolve, deferred);\n\
+            promise._onReject.push(onReject, deferred);\n\
+            break;\n\
+\n\
+        case RESOLVED:\n\
+            enqueueHandlers(promise._value, [onResolve, deferred], RESOLVED);\n\
+            break;\n\
+\n\
+        case REJECTED:\n\
+            enqueueHandlers(promise._value, [onReject, deferred], REJECTED);\n\
+            break;\n\
     }\n\
 \n\
-    _defineProperty(target, name, {\n\
-        configurable: true,\n\
-        writable: true,\n\
-        enumerable: false,\n\
-        value: value\n\
-    });\n\
+    return deferred.promise;\n\
 }\n\
 \n\
-function InstallFunctions(target, attr, list) {\n\
-    for (var i = 0; i < list.length; i += 2)\n\
-        AddNamedProperty(target, list[i], list[i + 1]);\n\
+function resolvePromise(promise, x) {\n\
+\n\
+    completePromise(promise, RESOLVED, x, promise._onResolve);\n\
 }\n\
 \n\
-var IsArray = Array.isArray || (function(obj) {\n\
-    var str = Object.prototype.toString;\n\
-    return function(obj) { return str.call(obj) === \"[object Array]\" };\n\
-})();\n\
+function rejectPromise(promise, r) {\n\
 \n\
-var UNDEFINED, DONT_ENUM, InternalArray = Array;\n\
-\n\
-// V8 Implementation\n\
-\n\
-var IsPromise;\n\
-var PromiseCreate;\n\
-var PromiseResolve;\n\
-var PromiseReject;\n\
-var PromiseChain;\n\
-var PromiseCatch;\n\
-var PromiseThen;\n\
-\n\
-// Status values: 0 = pending, +1 = resolved, -1 = rejected\n\
-var promiseStatus = \"Promise#status\";\n\
-var promiseValue = \"Promise#value\";\n\
-var promiseOnResolve = \"Promise#onResolve\";\n\
-var promiseOnReject = \"Promise#onReject\";\n\
-var promiseRaw = {};\n\
-var promiseHasHandler = \"Promise#hasHandler\";\n\
-var lastMicrotaskId = 0;\n\
-\n\
-var $Promise = function Promise(resolver) {\n\
-    if (resolver === promiseRaw) return;\n\
-    if (!IS_SPEC_FUNCTION(resolver))\n\
-      throw MakeTypeError('resolver_not_a_function', [resolver]);\n\
-    var promise = PromiseInit(this);\n\
-    try {\n\
-        resolver(function(x) { PromiseResolve(promise, x) },\n\
-                 function(r) { PromiseReject(promise, r) });\n\
-    } catch (e) {\n\
-        PromiseReject(promise, e);\n\
-    }\n\
+    completePromise(promise, REJECTED, r, promise._onReject);\n\
 }\n\
 \n\
-// Core functionality.\n\
+function completePromise(promise, status, value, queue) {\n\
 \n\
-function PromiseSet(promise, status, value, onResolve, onReject) {\n\
-    SET_PRIVATE(promise, promiseStatus, status);\n\
-    SET_PRIVATE(promise, promiseValue, value);\n\
-    SET_PRIVATE(promise, promiseOnResolve, onResolve);\n\
-    SET_PRIVATE(promise, promiseOnReject, onReject);\n\
-    return promise;\n\
-}\n\
+    if (promise._status === PENDING) {\n\
 \n\
-function PromiseInit(promise) {\n\
-    return PromiseSet(promise, 0, UNDEFINED, new InternalArray, new InternalArray);\n\
-}\n\
+        promise._status = status;\n\
+        promise._value = value;\n\
 \n\
-function PromiseDone(promise, status, value, promiseQueue) {\n\
-    if (GET_PRIVATE(promise, promiseStatus) === 0) {\n\
-        PromiseEnqueue(value, GET_PRIVATE(promise, promiseQueue), status);\n\
-        PromiseSet(promise, status, value);\n\
+        enqueueHandlers(value, queue, status);\n\
     }\n\
 }\n\
 \n\
-function PromiseCoerce(constructor, x) {\n\
-    if (!IsPromise(x) && IS_SPEC_OBJECT(x)) {\n\
-        var then;\n\
-        try {\n\
-            then = x.then;\n\
-        } catch(r) {\n\
-            return PromiseRejected.call(constructor, r);\n\
-        }\n\
-        if (IS_SPEC_FUNCTION(then)) {\n\
-            var deferred = PromiseDeferred.call(constructor);\n\
-            try {\n\
-                then.call(x, deferred.resolve, deferred.reject);\n\
-            } catch(r) {\n\
-                deferred.reject(r);\n\
-            }\n\
-            return deferred.promise;\n\
+function coerce(constructor, x) {\n\
+\n\
+    if (!isPromise(x) && Object(x) === x) {\n\
+\n\
+        var then$0;\n\
+\n\
+        try { then$0 = x.then }\n\
+        catch(r) { return makeRejected(constructor, r) }\n\
+\n\
+        if (typeof then$0 === \"function\") {\n\
+\n\
+            var deferred$0 = makeDeferred(constructor);\n\
+\n\
+            try { then$0.call(x, deferred$0.resolve, deferred$0.reject) }\n\
+            catch(r) { deferred$0.reject(r) }\n\
+\n\
+            return deferred$0.promise;\n\
         }\n\
     }\n\
+\n\
     return x;\n\
 }\n\
 \n\
-function PromiseHandle(value, handler, deferred) {\n\
-    try {\n\
-        var result = handler(value);\n\
-        if (result === deferred.promise)\n\
-            throw MakeTypeError('promise_cyclic', [result]);\n\
-        else if (IsPromise(result))\n\
-            PromiseChain.call(result, deferred.resolve, deferred.reject);\n\
-        else\n\
-            deferred.resolve(result);\n\
-    } catch (exception) {\n\
-        try { deferred.reject(exception) } catch (e) { }\n\
-    }\n\
-}\n\
+function enqueueHandlers(value, tasks, status) {\n\
 \n\
-function PromiseEnqueue(value, tasks, status) {\n\
-    EnqueueMicrotask(function() {\n\
-        for (var i = 0; i < tasks.length; i += 2)\n\
-            PromiseHandle(value, tasks[i], tasks[i + 1]);\n\
+    enqueueMicrotask(function(_) {\n\
+\n\
+        for (var i$1 = 0; i$1 < tasks.length; i$1 += 2)\n\
+            runHandler(value, tasks[i$1], tasks[i$1 + 1]);\n\
     });\n\
 }\n\
 \n\
-function PromiseIdResolveHandler(x) { return x }\n\
-function PromiseIdRejectHandler(r) { throw r }\n\
+function runHandler(value, handler, deferred) {\n\
 \n\
-function PromiseNopResolver() {}\n\
+    try {\n\
 \n\
-// -------------------------------------------------------------------\n\
-// Define exported functions.\n\
+        var result$0 = handler(value);\n\
 \n\
-// For bootstrapper.\n\
+        if (result$0 === deferred.promise)\n\
+            throw new TypeError(\"Promise cycle\");\n\
+        else if (isPromise(result$0))\n\
+            chain(result$0, deferred.resolve, deferred.reject);\n\
+        else\n\
+            deferred.resolve(result$0);\n\
 \n\
-IsPromise = function IsPromise(x) {\n\
-    return IS_SPEC_OBJECT(x) && HAS_DEFINED_PRIVATE(x, promiseStatus);\n\
-};\n\
+    } catch (e) {\n\
 \n\
-PromiseCreate = function PromiseCreate() {\n\
-    return new $Promise(PromiseNopResolver);\n\
-};\n\
+        try { deferred.reject(e) }\n\
+        catch (e) { }\n\
+    }\n\
+}\n\
 \n\
-PromiseResolve = function PromiseResolve(promise, x) {\n\
-    PromiseDone(promise, +1, x, promiseOnResolve);\n\
-};\n\
+function isPromise(x) {\n\
 \n\
-PromiseReject = function PromiseReject(promise, r) {\n\
-    PromiseDone(promise, -1, r, promiseOnReject);\n\
-};\n\
+    try { return x._status !== void 0 }\n\
+    catch (e) { return false }\n\
+}\n\
 \n\
-// Convenience.\n\
+function makeDeferred(constructor) {\n\
 \n\
-function PromiseDeferred() {\n\
-    if (this === $Promise) {\n\
-        // Optimized case, avoid extra closure.\n\
-        var promise = PromiseInit(new $Promise(promiseRaw));\n\
+    if (constructor === Promise) {\n\
+\n\
+        var promise$0 = new Promise(OPTIMIZED);\n\
+\n\
+        promise$0._onResolve = [];\n\
+        promise$0._onReject = [];\n\
+\n\
         return {\n\
-            promise: promise,\n\
-            resolve: function(x) { PromiseResolve(promise, x) },\n\
-            reject: function(r) { PromiseReject(promise, r) }\n\
+\n\
+            promise: promise$0,\n\
+            resolve: function(x) { resolvePromise(promise$0, x) },\n\
+            reject: function(r) { rejectPromise(promise$0, r) },\n\
         };\n\
+\n\
     } else {\n\
-        var result = {};\n\
-        result.promise = new this(function(resolve, reject) {\n\
-            result.resolve = resolve;\n\
-            result.reject = reject;\n\
+\n\
+        var result$1 = {};\n\
+\n\
+        result$1.promise = new constructor(function(resolve, reject) {\n\
+\n\
+            result$1.resolve = resolve;\n\
+            result$1.reject = reject;\n\
         });\n\
-        return result;\n\
+\n\
+        return result$1;\n\
     }\n\
 }\n\
 \n\
-function PromiseResolved(x) {\n\
-    if (this === $Promise) {\n\
-        // Optimized case, avoid extra closure.\n\
-        return PromiseSet(new $Promise(promiseRaw), +1, x);\n\
-    } else {\n\
-        return new this(function(resolve, reject) { resolve(x) });\n\
+function makeRejected(constructor, r) {\n\
+\n\
+    if (constructor === Promise) {\n\
+\n\
+        var promise$1 = new Promise(OPTIMIZED);\n\
+        promise$1._status = REJECTED;\n\
+        promise$1._value = r;\n\
+        return promise$1;\n\
     }\n\
+\n\
+    return new constructor(function(resolve, reject) { return reject(r); });\n\
 }\n\
 \n\
-function PromiseRejected(r) {\n\
-    var promise;\n\
-    if (this === $Promise) {\n\
-        // Optimized case, avoid extra closure.\n\
-        promise = PromiseSet(new $Promise(promiseRaw), -1, r);\n\
-    } else {\n\
-        promise = new this(function(resolve, reject) { reject(r) });\n\
+function iterate(values, fn) {\n\
+\n\
+    if (typeof Symbol !== \"function\" || !Symbol.iterator) {\n\
+\n\
+        if (!Array.isArray(values))\n\
+            throw new TypeError(\"Invalid argument\");\n\
+\n\
+        values.forEach(fn);\n\
     }\n\
-    return promise;\n\
+\n\
+    var i = 0;\n\
+\n\
+    for (var __$0 = (values)[Symbol.iterator](), __$1; __$1 = __$0.next(), !__$1.done;)\n\
+        { var x$0 = __$1.value; fn(x$0, i++); }\n\
 }\n\
 \n\
-// Simple chaining.\n\
+addProperties(Promise.prototype, {\n\
 \n\
-PromiseChain = function PromiseChain(onResolve, onReject) {\n\
-    onResolve = IS_UNDEFINED(onResolve) ? PromiseIdResolveHandler : onResolve;\n\
-    onReject = IS_UNDEFINED(onReject) ? PromiseIdRejectHandler : onReject;\n\
-    var deferred = PromiseDeferred.call(this.constructor);\n\
-    switch (GET_PRIVATE(this, promiseStatus)) {\n\
-        case UNDEFINED:\n\
-            throw MakeTypeError('not_a_promise', [this]);\n\
-        case 0:  // Pending\n\
-            GET_PRIVATE(this, promiseOnResolve).push(onResolve, deferred);\n\
-            GET_PRIVATE(this, promiseOnReject).push(onReject, deferred);\n\
-            break;\n\
-        case +1:  // Resolved\n\
-            PromiseEnqueue(GET_PRIVATE(this, promiseValue), [onResolve, deferred], +1);\n\
-            break;\n\
-        case -1:  // Rejected\n\
-            PromiseEnqueue(GET_PRIVATE(this, promiseValue), [onReject, deferred], -1);\n\
-            break;\n\
-    }\n\
-    // Mark this promise as having handler.\n\
-    SET_PRIVATE(this, promiseHasHandler, true);\n\
-    return deferred.promise;\n\
-}\n\
+    then: function(onResolve, onReject) { var __this = this; \n\
 \n\
-PromiseCatch = function PromiseCatch(onReject) {\n\
-    return this.then(UNDEFINED, onReject);\n\
-}\n\
+        onResolve = typeof onResolve === \"function\" ? onResolve : idResolveHandler;\n\
+        onReject = typeof onReject === \"function\" ? onReject : idRejectHandler;\n\
 \n\
-// Multi-unwrapped chaining with thenable coercion.\n\
+        var constructor = this.constructor;\n\
 \n\
-PromiseThen = function PromiseThen(onResolve, onReject) {\n\
-    onResolve = IS_SPEC_FUNCTION(onResolve) ? onResolve : PromiseIdResolveHandler;\n\
-    onReject = IS_SPEC_FUNCTION(onReject) ? onReject : PromiseIdRejectHandler;\n\
-    var that = this;\n\
-    var constructor = this.constructor;\n\
-    return PromiseChain.call(\n\
-        this,\n\
-        function(x) {\n\
-            x = PromiseCoerce(constructor, x);\n\
-            return x === that ? onReject(MakeTypeError('promise_cyclic', [x])) :\n\
-                IsPromise(x) ? x.then(onResolve, onReject) :\n\
+        return chain(this, function(x) {\n\
+\n\
+            x = coerce(constructor, x);\n\
+\n\
+            return x === __this ? onReject(new TypeError(\"Promise cycle\")) :\n\
+                isPromise(x) ? x.then(onResolve, onReject) :\n\
                 onResolve(x);\n\
-        },\n\
-        onReject);\n\
-}\n\
 \n\
-// Combinators.\n\
+        }, onReject);\n\
+    },\n\
 \n\
-function PromiseCast(x) {\n\
-    return IsPromise(x) ? x : new this(function(resolve) { resolve(x) });\n\
-}\n\
+    catch: function(onReject) {\n\
 \n\
-function PromiseAll(values) {\n\
-    var deferred = PromiseDeferred.call(this);\n\
-    var resolutions = [];\n\
-    if (!IsArray(values)) {\n\
-        deferred.reject(MakeTypeError('invalid_argument'));\n\
+        return this.then(void 0, onReject);\n\
+    },\n\
+\n\
+});\n\
+\n\
+addProperties(Promise, {\n\
+\n\
+    reject: function(e) {\n\
+\n\
+        return makeRejected(this, e);\n\
+    },\n\
+\n\
+    resolve: function(x) {\n\
+\n\
+        return isPromise(x) ? x : new this(function(resolve) { return resolve(x); });\n\
+    },\n\
+\n\
+    all: function(values) { var __this = this; \n\
+\n\
+        var deferred = makeDeferred(this),\n\
+            resolutions = [],\n\
+            count = 0;\n\
+\n\
+        try {\n\
+\n\
+            iterate(values, function(x, i) {\n\
+\n\
+                count++;\n\
+\n\
+                __this.resolve(x).then(function(value) {\n\
+\n\
+                    resolutions[i] = value;\n\
+\n\
+                    if (--count === 0)\n\
+                        deferred.resolve(resolutions);\n\
+\n\
+                }, deferred.reject);\n\
+\n\
+            });\n\
+\n\
+            if (count === 0)\n\
+                deferred.resolve(resolutions);\n\
+\n\
+        } catch (e) {\n\
+\n\
+            deferred.reject(e);\n\
+        }\n\
+\n\
         return deferred.promise;\n\
-    }\n\
-    try {\n\
-        var count = values.length;\n\
-        if (count === 0) {\n\
-            deferred.resolve(resolutions);\n\
-        } else {\n\
-            for (var i = 0; i < values.length; ++i) {\n\
-                this.resolve(values[i]).then(\n\
-                    (function() {\n\
-                        // Nested scope to get closure over current i (and avoid .bind).\n\
-                        var i_captured = i;\n\
-                        return function(x) {\n\
-                            resolutions[i_captured] = x;\n\
-                            if (--count === 0) deferred.resolve(resolutions);\n\
-                        };\n\
-                    })(),\n\
-                    function(r) { deferred.reject(r) });\n\
+    },\n\
+\n\
+    race: function(values) { var __this = this; \n\
+\n\
+        var deferred = makeDeferred(this);\n\
+\n\
+        try {\n\
+\n\
+            iterate(values, function(x) { return __this.resolve(x).then(\n\
+                deferred.resolve,\n\
+                deferred.reject); });\n\
+\n\
+        } catch (e) {\n\
+\n\
+            deferred.reject(e);\n\
+        }\n\
+\n\
+        return deferred.promise;\n\
+    },\n\
+\n\
+});\n\
+\n\
+function polyfill() {\n\
+\n\
+    if (!global.Promise)\n\
+        global.Promise = Promise;\n\
+}\n\
+\n\
+exports.polyfill = polyfill;\n\
+\n\
+\n\
+})(_M9);\n\
+\n\
+(function(exports) {\n\
+\n\
+var addProperties = _M3.addProperties,\n\
+    toLength = _M3.toLength,\n\
+    toInteger = _M3.toInteger,\n\
+    sameValue = _M3.sameValue,\n\
+    assertThis = _M3.assertThis,\n\
+    isRegExp = _M3.isRegExp;\n\
+\n\
+\n\
+\n\
+\n\
+\n\
+// Repeat a string by \"squaring\"\n\
+function repeat(s, n) {\n\
+\n\
+    if (n < 1) return \"\";\n\
+    if (n % 2) return repeat(s, n - 1) + s;\n\
+    var half = repeat(s, n / 2);\n\
+    return half + half;\n\
+}\n\
+\n\
+function StringIterator(string) {\n\
+\n\
+    this.string = string;\n\
+    this.current = 0;\n\
+}\n\
+\n\
+addProperties(StringIterator.prototype = {}, {\n\
+\n\
+    next: function() {\n\
+\n\
+        var s = this.string,\n\
+            i = this.current,\n\
+            len = s.length;\n\
+\n\
+        if (i >= len) {\n\
+\n\
+            this.current = Infinity;\n\
+            return { value: void 0, done: true };\n\
+        }\n\
+\n\
+        var c = s.charCodeAt(i),\n\
+            chars = 1;\n\
+\n\
+        if (c >= 0xD800 && c <= 0xDBFF && i + 1 < s.length) {\n\
+\n\
+            c = s.charCodeAt(i + 1);\n\
+            chars = (c < 0xDC00 || c > 0xDFFF) ? 1 : 2;\n\
+        }\n\
+\n\
+        this.current += chars;\n\
+\n\
+        return { value: s.slice(i, this.current), done: false };\n\
+    },\n\
+\n\
+    \"@@iterator\": function() { return this },\n\
+\n\
+});\n\
+\n\
+function polyfill() {\n\
+\n\
+    addProperties(String, {\n\
+\n\
+        raw: function(callsite) { for (var args = [], __$0 = 1; __$0 < arguments.length; ++__$0) args.push(arguments[__$0]); \n\
+\n\
+            var raw = callsite.raw,\n\
+                len = toLength(raw.length);\n\
+\n\
+            if (len === 0)\n\
+                return \"\";\n\
+\n\
+            var s = \"\", i = 0;\n\
+\n\
+            while (true) {\n\
+\n\
+                s += raw[i];\n\
+                if (i + 1 === len || i >= args.length) break;\n\
+                s += args[i++];\n\
             }\n\
+\n\
+            return s;\n\
+        },\n\
+\n\
+        fromCodePoint: function() { for (var points = [], __$0 = 0; __$0 < arguments.length; ++__$0) points.push(arguments[__$0]); \n\
+\n\
+            var out = [];\n\
+\n\
+            points.forEach(function(next) {\n\
+\n\
+                next = Number(next);\n\
+\n\
+                if (!sameValue(next, toInteger(next)) || next < 0 || next > 0x10ffff)\n\
+                    throw new RangeError(\"Invalid code point \" + next);\n\
+\n\
+                if (next < 0x10000) {\n\
+\n\
+                    out.push(String.fromCharCode(next));\n\
+\n\
+                } else {\n\
+\n\
+                    next -= 0x10000;\n\
+                    out.push(String.fromCharCode((next >> 10) + 0xD800));\n\
+                    out.push(String.fromCharCode((next % 0x400) + 0xDC00));\n\
+                }\n\
+            });\n\
+\n\
+            return out.join(\"\");\n\
         }\n\
-    } catch (e) {\n\
-        deferred.reject(e);\n\
-    }\n\
-    return deferred.promise;\n\
+\n\
+    });\n\
+\n\
+    addProperties(String.prototype, {\n\
+\n\
+        repeat: function(count) {\n\
+\n\
+            assertThis(this, \"String.prototype.repeat\");\n\
+\n\
+            var string = String(this);\n\
+\n\
+            count = toInteger(count);\n\
+\n\
+            if (count < 0 || count === Infinity)\n\
+                throw new RangeError(\"Invalid count value\");\n\
+\n\
+            return repeat(string, count);\n\
+        },\n\
+\n\
+        startsWith: function(search) {\n\
+\n\
+            assertThis(this, \"String.prototype.startsWith\");\n\
+\n\
+            if (isRegExp(search))\n\
+                throw new TypeError(\"First argument to String.prototype.startsWith must not be a regular expression\");\n\
+\n\
+            var string = String(this);\n\
+\n\
+            search = String(search);\n\
+\n\
+            var pos = arguments.length > 1 ? arguments[1] : undefined,\n\
+                start = Math.max(toInteger(pos), 0);\n\
+\n\
+            return string.slice(start, start + search.length) === search;\n\
+        },\n\
+\n\
+        endsWith: function(search) {\n\
+\n\
+            assertThis(this, \"String.prototype.endsWith\");\n\
+\n\
+            if (isRegExp(search))\n\
+                throw new TypeError(\"First argument to String.prototype.endsWith must not be a regular expression\");\n\
+\n\
+            var string = String(this);\n\
+\n\
+            search = String(search);\n\
+\n\
+            var len = string.length,\n\
+                arg = arguments.length > 1 ? arguments[1] : undefined,\n\
+                pos = arg === undefined ? len : toInteger(arg),\n\
+                end = Math.min(Math.max(pos, 0), len);\n\
+\n\
+            return string.slice(end - search.length, end) === search;\n\
+        },\n\
+\n\
+        contains: function(search) {\n\
+\n\
+            assertThis(this, \"String.prototype.contains\");\n\
+\n\
+            var string = String(this),\n\
+                pos = arguments.length > 1 ? arguments[1] : undefined;\n\
+\n\
+            // Somehow this trick makes method 100% compat with the spec\n\
+            return string.indexOf(search, pos) !== -1;\n\
+        },\n\
+\n\
+        codePointAt: function(pos) {\n\
+\n\
+            assertThis(this, \"String.prototype.codePointAt\");\n\
+\n\
+            var string = String(this),\n\
+                len = string.length;\n\
+\n\
+            pos = toInteger(pos);\n\
+\n\
+            if (pos < 0 || pos >= len)\n\
+                return undefined;\n\
+\n\
+            var a = string.charCodeAt(pos);\n\
+\n\
+            if (a < 0xD800 || a > 0xDBFF || pos + 1 === len)\n\
+                return a;\n\
+\n\
+            var b = string.charCodeAt(pos + 1);\n\
+\n\
+            if (b < 0xDC00 || b > 0xDFFF)\n\
+                return a;\n\
+\n\
+            return ((a - 0xD800) * 1024) + (b - 0xDC00) + 0x10000;\n\
+        },\n\
+\n\
+        \"@@iterator\": function() {\n\
+\n\
+            assertThis(this, \"String.prototype[Symbol.iterator]\");\n\
+            return new StringIterator(this);\n\
+        },\n\
+\n\
+    });\n\
+\n\
 }\n\
 \n\
-function PromiseOne(values) {\n\
-    var deferred = PromiseDeferred.call(this);\n\
-    if (!IsArray(values)) {\n\
-        deferred.reject(MakeTypeError('invalid_argument'));\n\
-        return deferred.promise;\n\
-    }\n\
-    try {\n\
-        for (var i = 0; i < values.length; ++i) {\n\
-            this.resolve(values[i]).then(\n\
-                function(x) { deferred.resolve(x) },\n\
-                function(r) { deferred.reject(r) });\n\
-        }\n\
-    } catch (e) {\n\
-        deferred.reject(e);\n\
-    }\n\
-    return deferred.promise;\n\
+exports.polyfill = polyfill;\n\
+\n\
+\n\
+})(_M10);\n\
+\n\
+(function(exports) {\n\
+\n\
+var global = _M3.global;\n\
+\n\
+var symbols = _M4;\n\
+var array = _M5;\n\
+var mapset = _M6;\n\
+var number = _M7;\n\
+var object = _M8;\n\
+var promise = _M9;\n\
+var string = _M10;\n\
+\n\
+\n\
+\n\
+function polyfill() {\n\
+\n\
+    [symbols, array, mapset, number, object, promise, string]\n\
+        .forEach(function(m) { return m.polyfill(global); });\n\
 }\n\
 \n\
-// -------------------------------------------------------------------\n\
-// Install exported functions.\n\
+exports.global = global;\n\
+exports.polyfill = polyfill;\n\
 \n\
-AddNamedProperty(Global, 'Promise', $Promise, DONT_ENUM);\n\
 \n\
-InstallFunctions($Promise, DONT_ENUM, [\n\
-    \"defer\", PromiseDeferred,\n\
-    \"accept\", PromiseResolved,\n\
-    \"reject\", PromiseRejected,\n\
-    \"all\", PromiseAll,\n\
-    \"race\", PromiseOne,\n\
-    \"resolve\", PromiseCast\n\
-]);\n\
+})(_M2);\n\
 \n\
-InstallFunctions($Promise.prototype, DONT_ENUM, [\n\
-    \"chain\", PromiseChain,\n\
-    \"then\", PromiseThen,\n\
-    \"catch\", PromiseCatch\n\
-]);\n\
+(function(exports) {\n\
 \n\
-})();\n\
-";
+var polyfill = _M2.polyfill;\n\
+\n\
+polyfill();\n\
+\n\
+\n\
+})(_M1);\n\
+\n\
+\n\
+}, \"\");";
 
 
 exports.Runtime = Runtime;
 
 
-})(_M16);
+},
+16, function(module, exports) {
 
-(function(exports) {
-
-var parse = _M9.parse, AST = _M9.AST;
+var parse = __M(8).parse, AST = __M(8).AST;
 
 var RESERVED_WORD = new RegExp("^(?:" +
     "break|case|catch|class|const|continue|debugger|default|delete|do|" +
@@ -10139,14 +10186,6 @@ function collapseScopes(parseResult) {
 
     function rename(node) {
 
-        /*
-
-        TODO:  Throw a compile-time error if a lexical name is referenced in the same
-        function (not a nested closure) before the binding is initialized.  This won't
-        catch all potential TDZ issues but will help stop some obvious bugs.
-
-        */
-
         var varParent = node.parent.type === "var";
 
         Object.keys(node.names).forEach(function(name) {
@@ -10159,8 +10198,35 @@ function collapseScopes(parseResult) {
 
             record.declarations.forEach(function(decl) { return decl.suffix = suffix; });
             record.references.forEach(function(ref) { return ref.suffix = suffix; });
+
+            if (record.const)
+                record.references.forEach(checkConstRef);
         });
     }
+
+    function checkConstRef(ref) {
+
+        var node = ref;
+
+        while (node.parent.type === "ParenExpression")
+            node = node.parent;
+
+        var target;
+
+        switch (ref.parent.type) {
+            case "UpdateExpression":
+                target = ref.parent.expression;
+                break;
+
+            case "AssignmentExpression":
+                target = ref.parent.left;
+                break;
+        }
+
+        if (node === target)
+            fail("Invalid assignment to constant variable", ref);
+    }
+
 }
 
 function replaceText(input, options) {
@@ -10174,6 +10240,7 @@ var Replacer = _esdown.class(function(__) { var Replacer;
 
         this.options = {
             identifyModule: function(_) { return "_M" + (__this.uid++); },
+            replaceRequire: function(_) { return null; },
             module: false,
         };
 
@@ -10200,6 +10267,7 @@ var Replacer = _esdown.class(function(__) { var Replacer;
         });
 
         var root = this.parseResult.ast;
+        root.start = 0;
 
         this.input = input;
         this.exports = {};
@@ -10214,10 +10282,6 @@ var Replacer = _esdown.class(function(__) { var Replacer;
         var visit = function(node) {
 
             node.text = null;
-
-            // Call pre-order traversal method
-            if (__this[node.type + "Begin"])
-                __this[node.type + "Begin"](node);
 
             var strict = __this.isStrict;
 
@@ -10406,7 +10470,6 @@ var Replacer = _esdown.class(function(__) { var Replacer;
 
         return "";
     },
-
 
     ComputedPropertyName: function(node) {
 
@@ -10649,6 +10712,14 @@ var Replacer = _esdown.class(function(__) { var Replacer;
         if (callee.type === "SuperKeyword")
             throw new Error("Super call not supported");
 
+        if (callee.text === "require" && args.length > 0 && args[0].type === "StringLiteral") {
+
+            var ident$0 = this.options.replaceRequire(args[0].value);
+
+            if (ident$0)
+                return ident$0;
+        }
+
         if (node.hasSpread)
             spread = this.spreadList(args);
 
@@ -10740,6 +10811,7 @@ var Replacer = _esdown.class(function(__) { var Replacer;
         }
     },
 
+    // Experimental
     PipeExpression: function(node) {
 
         var left = node.left.text,
@@ -10840,8 +10912,7 @@ var Replacer = _esdown.class(function(__) { var Replacer;
         this.markRuntime("classes");
 
         return "var " + node.identifier.text + " = _esdown.class(" +
-            (node.base ? (node.base.text + ", ") : "") +
-            "function(__) {" +
+            "function(__" + (node.hasStatic ? ", __static" : "") + ") {" +
                 this.strictDirective() +
                 this.removeBraces(node.body.text) + " });";
     },
@@ -10864,8 +10935,7 @@ var Replacer = _esdown.class(function(__) { var Replacer;
 
         return "(" + before +
             "_esdown.class(" +
-            (node.base ? (node.base.text + ", ") : "") +
-            "function(__) {" +
+            "function(__" + (node.hasStatic ? ", __static" : "") + ") {" +
                 this.strictDirective() +
                 this.removeBraces(node.body.text) + " })" +
             after + ")";
@@ -10874,10 +10944,10 @@ var Replacer = _esdown.class(function(__) { var Replacer;
     ClassBody: function(node) { var __this = this; 
 
         var classIdent = node.parent.identifier,
-            hasBase = !!node.parent.base,
             elems = node.elements,
             hasCtor = false,
-            ctorName = classIdent ? classIdent.value : "__ctor",
+            ctorName = classIdent ? classIdent.value : "",
+            ctorHead = (ctorName ? ctorName + " = " : "") + "function",
             header = [],
             footer = [];
 
@@ -10887,14 +10957,14 @@ var Replacer = _esdown.class(function(__) { var Replacer;
                 return "";
 
             var text = e.text,
-                fn = "__",
-                target = "";
+                fn = "__";
 
-            if (e.static)
-                fn += ".static";
+            if (e.static) {
 
-            if (e.static)
+                node.parent.hasStatic = true;
+                fn = "__static";
                 text = text.replace(/^static\s*/, "");
+            }
 
             if (e.kind === "constructor") {
 
@@ -10902,10 +10972,10 @@ var Replacer = _esdown.class(function(__) { var Replacer;
 
                 // Give the constructor function a name so that the class function's
                 // name property will be correct and capture the constructor.
-                text = text.replace(/:\s*function/, ": " + ctorName + " = function");
+                text = text.replace(/:\s*function/, ": " + ctorHead);
             }
 
-            var prefix = fn + "(" + (target ? target + ", " : "");
+            var prefix = fn + "(";
 
             if (e.name.type === "ComputedPropertyName") {
 
@@ -10925,27 +10995,16 @@ var Replacer = _esdown.class(function(__) { var Replacer;
                 e.text = prefix + "{ " + text + "});";
             }
 
-            return prefix;
+            return e.static ? "" : prefix;
 
         }, "");
 
-        header.push("var " + ctorName + ";");
+        if (ctorName)
+            header.push("var " + ctorName + ";");
 
         // Add a default constructor if none was provided
-        if (!hasCtor) {
-
-            var ctorBody$0 = "";
-
-            if (hasBase)
-                ctorBody$0 = "__.csuper.apply(this, arguments);";
-
-            if (ctorBody$0)
-                ctorBody$0 = " " + ctorBody$0 + " ";
-
-            var ctor$0 = ctorName + " = function() {" + ctorBody$0 + "}";
-
-            header.push("__({ constructor: " + ctor$0 + " });");
-        }
+        if (!hasCtor)
+            header.push("__({ constructor: " + ctorHead + "() {} });");
 
         var text = this.stringify(node);
 
@@ -11548,9 +11607,8 @@ var Replacer = _esdown.class(function(__) { var Replacer;
 exports.replaceText = replaceText;
 
 
-})(_M17);
-
-(function(exports) {
+},
+14, function(module, exports) {
 
 var NODE_SCHEME = /^node:/i,
       URI_SCHEME = /^[a-z]+:/i;
@@ -11570,18 +11628,23 @@ function hasScheme(uri) {
     return URI_SCHEME.test(uri);
 }
 
+function addLegacyScheme(uri) {
+
+    return "node:" + uri;
+}
+
 exports.isLegacyScheme = isLegacyScheme;
 exports.removeScheme = removeScheme;
 exports.hasScheme = hasScheme;
+exports.addLegacyScheme = addLegacyScheme;
 
 
-})(_M15);
+},
+7, function(module, exports) {
 
-(function(exports) {
-
-var Runtime = _M16.Runtime;
-var replaceText = _M17.replaceText;
-var isLegacyScheme = _M15.isLegacyScheme, removeScheme = _M15.removeScheme;
+var Runtime = __M(15).Runtime;
+var replaceText = __M(16).replaceText;
+var isLegacyScheme = __M(14).isLegacyScheme, removeScheme = __M(14).removeScheme;
 
 var SIGNATURE = "/*=esdown=*/";
 
@@ -11593,21 +11656,11 @@ var WRAP_CALLEE = "(function(fn, name) { " +
 
     // DOM global module:
     "else if (typeof self !== 'undefined') " +
-        "fn(function() { return {} }, name === '*' ? self : (self[name] = {}), {}); " +
+        "fn(void 0, name === '*' ? self : (name ? self[name] = {} : {})); " +
 
 "})";
 
-var MODULE_IMPORT_RUNTIME =
-"function __load(p, l) { " +
-    "module.__es6 = !l; " +
-    "var e = require(p); " +
-    "if (e && e.constructor !== Object) " +
-        "e = Object.create(e, { 'default': { value: e } }); " +
-    "return e; " +
-"} ";
-
-var MODULE_IMPORT =
-"function __import(e) { " +
+var MODULE_IMPORT = "function __import(e) { " +
     "return !e || e.constructor === Object ? e : " +
         "Object.create(e, { 'default': { value: e } }); " +
 "} ";
@@ -11626,22 +11679,13 @@ function sanitize(text) {
 
 function wrapRuntime() {
 
-    var text = replaceText(Runtime.API, { module: true }).output;
-
     // Wrap runtime library in an IIFE, exporting into the _esdown variable
-    return "var _esdown = {}; (function(exports) {\n\n" + text + "\n\n})(_esdown);";
+    return "var _esdown = {}; (function(exports) {\n\n" + Runtime.API + "\n\n})(_esdown);";
 }
 
 function wrapPolyfills() {
 
-    return Object.keys(Runtime).filter(function(key) { return key !== "API"; }).map(function(key) {
-
-        var text = replaceText(Runtime[key]).output;
-
-        // Wrap each polyfill module in an IIFE
-        return "(function() {\n\n" + text + "\n\n})();\n\n";
-
-    }).join("");
+    return "(function() { var exports = {};\n\n" + Runtime.Polyfill + "\n\n})();";
 }
 
 function translate(input, options) { if (options === void 0) options = {}; 
@@ -11691,7 +11735,7 @@ function wrapModule(text, imports, options) { if (imports === void 0) imports = 
     var header = "'use strict'; ";
 
     if (imports.length > 0)
-        header += options.runtimeImports ? MODULE_IMPORT_RUNTIME : MODULE_IMPORT;
+        header += MODULE_IMPORT;
 
     var requires = imports.map(function(dep) {
 
@@ -11702,11 +11746,8 @@ function wrapModule(text, imports, options) { if (imports === void 0) imports = 
         if (legacy)
             url = removeScheme(url);
 
-        if (options.runtimeImports) {
-
-            var flag$0 = legacy ? "1" : "0";
-            return "" + (ident) + " = __load(" + (JSON.stringify(url)) + ", " + (flag$0) + ")";
-        }
+        if (options.runtimeImports && !legacy)
+            url += "##ES6";
 
         return "" + (ident) + " = __import(require(" + (JSON.stringify(url)) + "))";
     });
@@ -11723,9 +11764,17 @@ function wrapModule(text, imports, options) { if (imports === void 0) imports = 
     if (!options.global)
         return SIGNATURE + header + text;
 
+    if (typeof options.global !== "string")
+        return SIGNATURE + header + text;
+
+    var name = options.global;
+
+    if (name === ".")
+        name = "";
+
     return SIGNATURE + WRAP_CALLEE + "(" +
         "function(require, exports, module) { " + header + text + "\n\n}, " +
-        JSON.stringify(options.global) +
+        JSON.stringify(name) +
     ");";
 }
 
@@ -11739,18 +11788,35 @@ exports.wrapModule = wrapModule;
 exports.isWrapped = isWrapped;
 
 
-})(_M8);
+},
+13, function(module, exports) {
 
-(function(exports) {
-
-var Path = _M3;
-var FS = _M2;
+var Path = __M(2);
+var FS = __M(1);
 
 var NODE_PATH = typeof process !== "undefined" && process.env["NODE_PATH"] || "",
-      NOT_PACKAGE = /^(?:\.{0,2}\/|[a-z]+:)/i;
+      NOT_PACKAGE = /^(?:\.{0,2}\/|[a-z]+:)/i,
+      isWindows = process.platform === "win32";
 
-var Module = module.constructor,
-    packageRoots;
+var globalModulePaths = (function(_) {
+
+    var home = isWindows ? process.env.USERPROFILE : process.env.HOME,
+        paths = [Path.resolve(process.execPath, "..", "..", "lib", "node")];
+
+    if (home) {
+
+        paths.unshift(Path.resolve(home, ".node_libraries"));
+        paths.unshift(Path.resolve(home, ".node_modules"));
+    }
+
+    var nodePath = process.env.NODE_PATH;
+
+    if (nodePath)
+        paths = nodePath.split(Path.delimiter).filter(Boolean).concat(paths);
+
+    return paths;
+
+})();
 
 function isFile(path) {
 
@@ -11772,44 +11838,110 @@ function isDirectory(path) {
     return stat && stat.isDirectory();
 }
 
-function getFolderEntry(dir) {
+function getFolderEntryPoint(dir, legacy) {
 
-    var path;
+    var join = Path.join;
 
-    // Look for an ES entry point (default.js)
-    path = Path.join(dir, "default.js");
+    // Look for an ES entry point first (default.js)
+    if (!legacy) {
 
-    if (isFile(path))
-        return { path: path };
+        var path$0 = join(dir, "default.js");
 
-    // Look for a legacy entry point (package.json or index.js)
-    path = Module._findPath("./", [dir]);
+        if (isFile(path$0))
+            return { path: path$0, legacy: false };
+    }
 
-    if (path)
-        return { path: path, legacy: true };
+    // == Legacy package lookup rules ==
+
+    var tryPaths = [];
+
+    // Look for a package.json manifest file
+    var main = (readPackageManifest(dir) || {}).main;
+
+    // If we have a manifest with a "main" path...
+    if (typeof main === "string") {
+
+        if (!main.endsWith("/"))
+            tryPaths.push(join(dir, main), join(dir, main + ".js"));
+
+        tryPaths.push(join(dir, main, "index.js"));
+    }
+
+    // Try "index"
+    tryPaths.push(join(dir, "index.js"));
+
+    for (var i$0 = 0; i$0 < tryPaths.length; ++i$0) {
+
+        var path$1 = tryPaths[i$0];
+
+        if (isFile(path$1))
+            return { path: path$1, legacy: true };
+    }
 
     return null;
 }
 
-function locateModule(path, base) {
+function readPackageManifest(path) {
+
+    path = Path.join(path, "package.json");
+
+    if (!isFile(path))
+        return null;
+
+    var text = FS.readFileSync(path, "utf8");
+
+    try {
+
+        return JSON.parse(text);
+
+    } catch (e) {
+
+        e.message = "Error parsing " + path + ": " + e.message;
+        throw e;
+    }
+}
+
+function locateModule(path, base, legacy) {
 
     if (isPackageSpecifier(path))
-        return locatePackage(path, base);
+        return locatePackage(path, base, legacy);
 
-    if (path.charAt(0) !== "." && path.charAt(0) !== "/")
-        return { path: path };
+    // If the module specifier is neither a package path nor a "file" path,
+    // then just return the specifier itself.  The locator does not have
+    // enough information to locate it with any greater precision.
+    if (!path.startsWith(".") && !path.startsWith("/"))
+        throw new Error("Invalid module path");
 
     path = Path.resolve(base, path);
 
     if (isDirectory(path)) {
 
-        var pathInfo$0 = getFolderEntry(path);
-        
+        // If the path is a directory, then attempt to find the entry point
+        // using folder lookup rules
+        var pathInfo$0 = getFolderEntryPoint(path, legacy);
+
         if (pathInfo$0)
             return pathInfo$0;
     }
 
-    return { path: path };
+    if (legacy) {
+
+        // If we are performing legacy lookup and the path is not found, then
+        // attempt to find the file by appending a ".js" file extension.
+        // We currently don't look for ".json" files.
+        if (!path.endsWith("/") && !isFile(path)) {
+
+            if (isFile(path + ".js"))
+                return { path: path + ".js", legacy: true };
+        }
+    }
+
+    return { path: path, legacy: legacy };
+}
+
+function isRelativePath(spec) {
+
+    return spec.startsWith(".") || spec.startsWith("/");
 }
 
 function isPackageSpecifier(spec) {
@@ -11817,25 +11949,15 @@ function isPackageSpecifier(spec) {
     return !NOT_PACKAGE.test(spec);
 }
 
-function locatePackage(name, base) {
+function locatePackage(name, base, legacy) {
 
     if (NOT_PACKAGE.test(name))
         throw new Error("Not a package specifier");
 
     var pathInfo;
 
-    if (!packageRoots)
-        packageRoots = NODE_PATH.split(Path.delimiter).map(function(v) { return v.trim(); });
-
-    var list = Module._nodeModulePaths(base).concat(packageRoots);
-
-    list.some(function(root) {
-
-        pathInfo = getFolderEntry(Path.resolve(root, name));
-
-        if (pathInfo)
-            return true;
-    });
+    getPackagePaths(base).some(function(root) { return pathInfo = getFolderEntryPoint(Path.resolve(root, name), legacy); }
+);
 
     if (!pathInfo)
         throw new Error("Package " + (name) + " could not be found.");
@@ -11843,27 +11965,54 @@ function locatePackage(name, base) {
     return pathInfo;
 }
 
+function getPackagePaths(dir) {
+
+    return nodeModulePaths(dir).concat(globalModulePaths);
+}
+
+function nodeModulePaths(path) {
+
+    path = Path.resolve(path);
+
+    var parts = path.split(isWindows ? /[\/\\]/ : /\//),
+        paths = [];
+
+    // Build a list of "node_modules" folder paths, starting from
+    // the current directory and then under each parent directory
+    for (var i$1 = parts.length - 1; i$1 >= 0; --i$1) {
+
+        // If this folder is already a node_modules folder, then
+        // skip it (we want to avoid "node_modules/node_modules")
+        if (parts[i$1] === "node_modules")
+            continue;
+
+        paths.push(parts.slice(0, i$1 + 1).join(Path.sep) + Path.sep + "node_modules");
+    }
+
+    return paths;
+}
+
 exports.locateModule = locateModule;
+exports.isRelativePath = isRelativePath;
 exports.isPackageSpecifier = isPackageSpecifier;
 exports.locatePackage = locatePackage;
 
 
-})(_M14);
+},
+5, function(module, exports) {
 
-(function(exports) {
+var FS = __M(1);
+var REPL = __M(10);
+var VM = __M(11);
+var Path = __M(2);
+var Util = __M(12);
 
-var FS = _M2;
-var REPL = _M11;
-var VM = _M12;
-var Path = _M3;
-var Util = _M13;
+var Style = __M(3).ConsoleStyle;
+var parse = __M(8).parse;
+var translate = __M(7).translate;
+var isPackageSpecifier = __M(13).isPackageSpecifier, locateModule = __M(13).locateModule;
 
-var Style = _M4.ConsoleStyle;
-var parse = _M9.parse;
-var translate = _M8.translate;
-var isPackageSpecifier = _M14.isPackageSpecifier, locateModule = _M14.locateModule;
-
-var Module = module.constructor;
+var Module = require.main.constructor;
 
 function formatSyntaxError(e, filename) {
 
@@ -11900,15 +12049,10 @@ function addExtension() {
 
     Module.prototype.importSync = function(path) {
 
-        if (/^node:/.test(path)) {
-
+        if (/^node:/.test(path))
             path = path.slice(5);
-            this.__es6 = false;
-
-        } else {
-
-            this.__es6 = true;
-        }
+        else
+            path += "##ES6";
 
         var e = this.require(path);
         if (e && e.constructor !== Object) e.default = e;
@@ -11917,14 +12061,12 @@ function addExtension() {
 
     Module._load = function(request, parent, isMain) {
 
-        if (parent.__es6) {
+        if (request.endsWith("##ES6")) {
 
-            var loc$0 = locateModule(request, Path.dirname(parent.filename));
-
+            var loc$0 = locateModule(request.slice(0, -5), Path.dirname(parent.filename));
             request = loc$0.path;
 
-            if (loc$0.legacy)
-                parent.__es6 = false;
+            parent.__es6 = !loc$0.legacy;
         }
 
         var m = moduleLoad(request, parent, isMain);
@@ -11941,9 +12083,7 @@ function addExtension() {
 
             text = source = FS.readFileSync(filename, "utf8");
 
-            // Only translate as a module if the source module is requesting
-            // via import syntax
-            var m$0 = !!module.parent.__es6;
+            var m$0 = Boolean(module.parent.__es6);
 
             text = translate(text, {
                 wrap: m$0,
@@ -11973,7 +12113,9 @@ function runModule(path) {
 
     var loc = locateModule(path, process.cwd());
 
-    module.__es6 = true;
+    if (!loc.legacy)
+        loc.path += "##ES6";
+
     var m = require(loc.path);
 
     if (m && m.constructor !== Object)
@@ -12212,26 +12354,60 @@ exports.runModule = runModule;
 exports.startREPL = startREPL;
 
 
-})(_M6);
+},
+6, function(module, exports) {
 
-(function(exports) {
+var Path = __M(2);
+var readFile = __M(4).readFile, writeFile = __M(4).writeFile;
+var isPackageSpecifier = __M(13).isPackageSpecifier, locateModule = __M(13).locateModule;
+var translate = __M(7).translate, wrapModule = __M(7).wrapModule;
+var isLegacyScheme = __M(14).isLegacyScheme, addLegacyScheme = __M(14).addLegacyScheme, removeScheme = __M(14).removeScheme, hasScheme = __M(14).hasScheme;
 
-var Path = _M3;
-var readFile = _M5.readFile, writeFile = _M5.writeFile;
-var isPackageSpecifier = _M14.isPackageSpecifier, locateModule = _M14.locateModule;
-var translate = _M8.translate, wrapModule = _M8.wrapModule;
-var isLegacyScheme = _M15.isLegacyScheme, removeScheme = _M15.removeScheme, hasScheme = _M15.hasScheme;
+var NODE_INTERNAL_MODULE = new RegExp("^(?:" + [
 
+    "assert", "buffer", "child_process", "cluster", "console", "constants", "crypto",
+    "dgram", "dns", "domain", "events", "freelist", "fs", "http", "https", "module",
+    "net", "os", "path", "process", "punycode", "querystring", "readline", "repl",
+    "smalloc", "stream", "string_decoder", "sys", "timers", "tls", "tty", "url", "util",
+    "v8", "vm", "zlib",
+
+].join("|") + ")$");
+
+var BUNDLE_INIT =
+"var __M; " +
+"(function(a) { " +
+    "var list = Array(a.length / 2); " +
+
+    "__M = function require(i) { " +
+        "var m = list[i], f, e; " +
+        "if (typeof m !== 'function') return m.exports; " +
+        "f = m; " +
+        "m = i ? { exports: {} } : module || { exports: exports }; " +
+        "f(list[i] = m, e = m.exports); " +
+        "if (m.exports !== e && !('default' in m.exports)) " +
+            "m.exports['default'] = m.exports; " +
+        "return m.exports; " +
+    "}; " +
+
+    "for (var i = 0; i < a.length; i += 2) { " +
+        "var j = Math.abs(a[i]); " +
+        "list[j] = a[i + 1]; " +
+        "if (a[i] >= 0) __M(j); " +
+    "} " +
+"})";
 
 var Node = _esdown.class(function(__) { var Node;
 
-    __({ constructor: Node = function(path, name) {
+    __({ constructor: Node = function(path, id) {
 
         this.path = path;
-        this.name = name;
-        this.edges = new Set;
+        this.id = id;
+        this.edges = new Map;
         this.output = null;
         this.runtime = false;
+        this.legacy = false;
+        this.importCount = 0;
+        this.ignore = false;
     }});
  });
 
@@ -12240,7 +12416,7 @@ var GraphBuilder = _esdown.class(function(__) { var GraphBuilder;
     __({ constructor: GraphBuilder = function(root) {
 
         this.nodes = new Map;
-        this.nextID = 1;
+        this.nextID = 0;
         this.root = this.add(root);
     },
 
@@ -12249,14 +12425,17 @@ var GraphBuilder = _esdown.class(function(__) { var GraphBuilder;
         return this.nodes.has(key);
     },
 
+    get: function(key) {
+
+        return this.nodes.get(key);
+    },
+
     add: function(key) {
 
         if (this.nodes.has(key))
             return this.nodes.get(key);
 
-        var name = "_M" + (this.nextID++),
-            node = new Node(key, name);
-
+        var node = new Node(key, this.nextID++);
         this.nodes.set(key, node);
         return node;
     },
@@ -12273,7 +12452,7 @@ var GraphBuilder = _esdown.class(function(__) { var GraphBuilder;
 
             visited.add(key);
             var node = __this.nodes.get(key);
-            node.edges.forEach(visit);
+            node.edges.forEach(function(node, key) { return visit(key); });
             list.push(node);
         };
 
@@ -12282,35 +12461,82 @@ var GraphBuilder = _esdown.class(function(__) { var GraphBuilder;
         return list;
     },
 
-    process: function(key, input) { var __this = this; 
+    addEdge: function(node, spec, fromRequire) {
 
-        if (!this.nodes.has(key))
-            throw new Error("Node not found");
+        var key = spec,
+            legacy = false,
+            ignore = false;
 
-        var node = this.nodes.get(key);
+        if (fromRequire) {
+
+            legacy = true;
+
+        } else if (isLegacyScheme(spec)) {
+
+            legacy = true;
+            key = removeScheme(spec);
+        }
+
+        if (legacy && NODE_INTERNAL_MODULE.test(key))
+            ignore = true;
+
+        if (ignore && fromRequire)
+            return null;
+
+        if (!ignore) {
+
+            var pathInfo$0 = locateModule(key, node.base, legacy);
+            key = pathInfo$0.path;
+            legacy = pathInfo$0.legacy;
+        }
+
+        var target = this.nodes.get(key);
+
+        if (target) {
+
+            if (target.legacy !== legacy)
+                throw new Error("Module '" + (key) + "' referenced as both legacy and non-legacy");
+
+        } else {
+
+            target = this.add(key);
+            target.legacy = legacy;
+            target.ignore = ignore;
+        }
+
+        if (!fromRequire)
+            target.importCount++;
+
+        node.edges.set(key, target);
+        return target;
+    },
+
+    process: function(node, input) { var __this = this; 
 
         if (node.output !== null)
             throw new Error("Node already processed");
 
-        var dir = Path.dirname(node.path),
-            result = {};
+        var result = {};
 
-        var identifyModule = function(path) {
-
-            path = locateModule(path, dir).path;
-            node.edges.add(path);
-            return __this.add(path).name;
-        };
+        node.base = Path.dirname(node.path);
 
         node.output = translate(input, {
-            identifyModule: identifyModule,
-            module: true,
-            result: result
+
+            identifyModule: function(path) { return "__M(" + (__this.addEdge(node, path, false).id) + ")"; },
+
+            replaceRequire: function(path) {
+
+                var n = __this.addEdge(node, path, true);
+                return n ? "__M(" + (n.id) + ")" : null;
+            },
+
+            module: !node.legacy,
+
+            result: result,
+
         });
 
         node.runtime = result.runtime.length > 0;
-
-        return node;
     }});
 
  });
@@ -12327,10 +12553,12 @@ function bundle(rootPath, options) { if (options === void 0) options = {};
 
     allFetched = new Promise(function(resolve, reject) { return resolver = { resolve: resolve, reject: reject }; });
 
-    function visit(path) {
+    function visit(node) {
 
-        // Exit if module has already been processed
-        if (visited.has(path))
+        var path = node.path;
+
+        // Exit if module has already been processed or should be ignored
+        if (node.ignore || visited.has(path))
             return;
 
         visited.add(path);
@@ -12338,17 +12566,8 @@ function bundle(rootPath, options) { if (options === void 0) options = {};
 
         readFile(path, { encoding: "utf8" }).then(function(code) {
 
-            var node = builder.process(path, code);
-
-            node.edges.forEach(function(path) {
-
-                // If we want to optionally limit the scope of the bundle, we
-                // will need to apply some kind of filter here.
-
-                // Do not bundle any files that start with a scheme prefix
-                if (!hasScheme(path))
-                    visit(path);
-            });
+            builder.process(node, code);
+            node.edges.forEach(visit);
 
             pending -= 1;
 
@@ -12364,38 +12583,34 @@ function bundle(rootPath, options) { if (options === void 0) options = {};
         });
     }
 
-    visit(rootPath);
+    visit(builder.root);
 
-    return allFetched.then(function($) {
+    return allFetched.then(function(_) {
 
-        var nodes = builder.sort(),
-            needsRuntime = options.polyfill,
-            imports = [],
-            varList = [],
-            output = "";
+        var needsRuntime = false;
 
-        nodes.forEach(function(node) {
-
-            if (node.output === null)
-                imports.push({ url: node.path, identifier: node.name });
-            else
-                varList.push("" + (node.name) + " = " + (node.path === rootPath ? "exports" : "{}") + "");
+        var output = builder.sort().map(function(node) {
 
             if (node.runtime)
                 needsRuntime = true;
-        });
 
-        if (varList.length > 0)
-            output += "var " + varList.join(",") + ";\n";
+            var id = node.id;
 
-        nodes.filter(function(n) { return n.output !== null; }).forEach(function(node) {
+            if (node.importCount === 0)
+                id = -id;
 
-            output += "\n(function(exports) {\n\n" + node.output +
-                "\n\n})(" + node.name + ");\n";
-        });
+            var init = node.output === null ?
+                "function(m) { m.exports = require(" + (JSON.stringify(node.path)) + ") }" :
+                "function(module, exports) {\n\n" + (node.output) + "\n\n}";
 
-        output = wrapModule(output, imports, {
-            
+            return "" + (id) + ", " + (init) + "";
+
+        }).join(",\n");
+
+        output = BUNDLE_INIT + "([\n" + (output) + "]);\n";
+
+        output = wrapModule(output, [], {
+
             global: options.global,
             runtime: needsRuntime,
             polyfill: options.polyfill,
@@ -12411,17 +12626,16 @@ function bundle(rootPath, options) { if (options === void 0) options = {};
 exports.bundle = bundle;
 
 
-})(_M7);
+},
+0, function(module, exports) {
 
-(function(exports) {
-
-var FS = _M2;
-var Path = _M3;
-var ConsoleCommand = _M4.ConsoleCommand;
-var readFile = _M5.readFile, writeFile = _M5.writeFile;
-var runModule = _M6.runModule, startREPL = _M6.startREPL, formatSyntaxError = _M6.formatSyntaxError;
-var bundle = _M7.bundle;
-var translate = _M8.translate;
+var FS = __M(1);
+var Path = __M(2);
+var ConsoleCommand = __M(3).ConsoleCommand;
+var readFile = __M(4).readFile, writeFile = __M(4).writeFile;
+var runModule = __M(5).runModule, startREPL = __M(5).startREPL, formatSyntaxError = __M(5).formatSyntaxError;
+var bundle = __M(6).bundle;
+var translate = __M(7).translate;
 
 
 
@@ -12585,11 +12799,11 @@ function main(args) {
 
 exports.translate = translate;
 exports.bundle = bundle;
-exports.parse = _M9.parse;
+exports.parse = __M(8).parse;
 exports.main = main;
 
 
-})(_M1);
+}]);
 
 
 }, "esdown");
