@@ -1,6 +1,6 @@
-/*=esdown=*/(function(fn, name) { if (typeof exports !== 'undefined') fn(require, exports, module); else if (typeof self !== 'undefined') fn(void 0, name === '*' ? self : (name ? self[name] = {} : {})); })(function(require, exports, module) { 'use strict'; var _esdown = {}; (function(exports) {
+/*=esdown=*/(function(fn, name) { if (typeof exports !== 'undefined') fn(require, exports, module); else if (typeof self !== 'undefined') fn(function() { return {} }, name === '*' ? self : (name ? self[name] = {} : {})); })(function(require, exports, module) { 'use strict'; var _esdown = {}; (function() { var exports = _esdown;
 
-var VERSION = "0.9.16";
+var VERSION = "1.0.2";
 
 var GLOBAL = (function() {
 
@@ -330,13 +330,12 @@ exports.async = asyncFunction;
 exports.asyncGen = asyncGenerator;
 
 
-})(_esdown);
+})();
 
 (function() { var exports = {};
 
-/*=esdown=*/(function(fn, name) { if (typeof exports !== 'undefined') fn(require, exports, module); else if (typeof self !== 'undefined') fn(null, name === '*' ? self : (name ? self[name] = {} : {})); })(function(require, exports, module) { 'use strict'; var _M3 = {}, _M4 = {}, _M5 = {}, _M6 = {}, _M7 = {}, _M8 = {}, _M9 = {}, _M10 = {}, _M2 = {}, _M1 = exports;
-
-(function(exports) {
+(function(fn, name) { if (typeof exports !== 'undefined') fn(require, exports, module); else if (typeof self !== 'undefined') fn(void 0, name === '*' ? self : (name ? self[name] = {} : {})); })(function(require, exports, module) { 'use strict'; var __M; (function(a) { var list = Array(a.length / 2); __M = function require(i) { var m = list[i], f, e; if (typeof m !== 'function') return m.exports; f = m; m = { exports: i ? {} : exports }; f(list[i] = m, e = m.exports); if (m.exports !== e && !('default' in m.exports)) m.exports['default'] = m.exports; return m.exports; }; for (var i = 0; i < a.length; i += 2) { var j = Math.abs(a[i]); list[j] = a[i + 1]; if (a[i] >= 0) __M(j); } })([
+2, function(module, exports) {
 
 var Global = (function() {
 
@@ -433,11 +432,10 @@ exports.toObject = toObject;
 exports.assertThis = assertThis;
 
 
-})(_M3);
+},
+3, function(module, exports) {
 
-(function(exports) {
-
-var addProperties = _M3.addProperties;
+var addProperties = __M(2).addProperties;
 
 var symbolCounter = 0;
 
@@ -467,11 +465,10 @@ function polyfill(global) {
 exports.polyfill = polyfill;
 
 
-})(_M4);
+},
+4, function(module, exports) {
 
-(function(exports) {
-
-var addProperties = _M3.addProperties, toObject = _M3.toObject, toLength = _M3.toLength, toInteger = _M3.toInteger;
+var addProperties = __M(2).addProperties, toObject = __M(2).toObject, toLength = __M(2).toLength, toInteger = __M(2).toInteger;
 
 function arrayFind(obj, pred, thisArg, type) {
 
@@ -678,11 +675,10 @@ function polyfill() {
 exports.polyfill = polyfill;
 
 
-})(_M5);
+},
+5, function(module, exports) {
 
-(function(exports) {
-
-var addProperties = _M3.addProperties;
+var addProperties = __M(2).addProperties;
 
 var ORIGIN = {}, REMOVED = {};
 
@@ -888,11 +884,10 @@ function polyfill(global) {
 exports.polyfill = polyfill;
 
 
-})(_M6);
+},
+6, function(module, exports) {
 
-(function(exports) {
-
-var toInteger = _M3.toInteger, addProperties = _M3.addProperties;
+var toInteger = __M(2).toInteger, addProperties = __M(2).addProperties;
 
 function isInteger(val) {
 
@@ -933,11 +928,10 @@ function polyfill() {
 exports.polyfill = polyfill;
 
 
-})(_M7);
+},
+7, function(module, exports) {
 
-(function(exports) {
-
-var addProperties = _M3.addProperties, toObject = _M3.toObject, sameValue = _M3.sameValue;
+var addProperties = __M(2).addProperties, toObject = __M(2).toObject, sameValue = __M(2).sameValue;
 
 function polyfill() {
 
@@ -978,11 +972,10 @@ function polyfill() {
 exports.polyfill = polyfill;
 
 
-})(_M8);
+},
+8, function(module, exports) {
 
-(function(exports) {
-
-var addProperties = _M3.addProperties, global = _M3.global;
+var addProperties = __M(2).addProperties, global = __M(2).global;
 
 var runLater = (function(_) {
 
@@ -1337,16 +1330,15 @@ function polyfill() {
 exports.polyfill = polyfill;
 
 
-})(_M9);
+},
+9, function(module, exports) {
 
-(function(exports) {
-
-var addProperties = _M3.addProperties,
-    toLength = _M3.toLength,
-    toInteger = _M3.toInteger,
-    sameValue = _M3.sameValue,
-    assertThis = _M3.assertThis,
-    isRegExp = _M3.isRegExp;
+var addProperties = __M(2).addProperties,
+    toLength = __M(2).toLength,
+    toInteger = __M(2).toInteger,
+    sameValue = __M(2).sameValue,
+    assertThis = __M(2).assertThis,
+    isRegExp = __M(2).isRegExp;
 
 
 
@@ -1503,9 +1495,9 @@ function polyfill() {
             return string.slice(end - search.length, end) === search;
         },
 
-        contains: function(search) {
+        includes: function(search) {
 
-            assertThis(this, "String.prototype.contains");
+            assertThis(this, "String.prototype.includes");
 
             var string = String(this),
                 pos = arguments.length > 1 ? arguments[1] : undefined;
@@ -1552,19 +1544,18 @@ function polyfill() {
 exports.polyfill = polyfill;
 
 
-})(_M10);
+},
+1, function(module, exports) {
 
-(function(exports) {
+var global = __M(2).global;
 
-var global = _M3.global;
-
-var symbols = _M4;
-var array = _M5;
-var mapset = _M6;
-var number = _M7;
-var object = _M8;
-var promise = _M9;
-var string = _M10;
+var symbols = __M(3);
+var array = __M(4);
+var mapset = __M(5);
+var number = __M(6);
+var object = __M(7);
+var promise = __M(8);
+var string = __M(9);
 
 
 
@@ -1578,23 +1569,22 @@ exports.global = global;
 exports.polyfill = polyfill;
 
 
-})(_M2);
+},
+0, function(module, exports) {
 
-(function(exports) {
-
-var polyfill = _M2.polyfill;
+var polyfill = __M(1).polyfill;
 
 polyfill();
 
 
-})(_M1);
+}]);
 
 
 }, "");
 
 })();
 
-var __M; (function(a) { var list = Array(a.length / 2); __M = function require(i) { var m = list[i], f, e; if (typeof m !== 'function') return m.exports; f = m; m = i ? { exports: {} } : module || { exports: exports }; f(list[i] = m, e = m.exports); if (m.exports !== e && !('default' in m.exports)) m.exports['default'] = m.exports; return m.exports; }; for (var i = 0; i < a.length; i += 2) { var j = Math.abs(a[i]); list[j] = a[i + 1]; if (a[i] >= 0) __M(j); } })([
+var __M; (function(a) { var list = Array(a.length / 2); __M = function(i) { var m = list[i], f, e, ee; if (typeof m !== 'function') return m.exports; f = m; m = { exports: i ? {} : exports }; f(list[i] = m, e = m.exports); ee = m.exports; if (ee && ee !== e && !('default' in ee)) ee['default'] = ee; return ee; }; for (var i = 0; i < a.length; i += 2) { var j = Math.abs(a[i]); list[j] = a[i + 1]; if (a[i] >= 0) __M(j); } })([
 1, function(m) { m.exports = require("fs") },
 2, function(m) { m.exports = require("path") },
 18, function(module, exports) {
@@ -8469,7 +8459,7 @@ var Runtime = {};
 
 Runtime.API = 
 
-"var VERSION = \"0.9.16\";\n\
+"var VERSION = \"1.0.2\";\n\
 \n\
 var GLOBAL = (function() {\n\
 \n\
@@ -8801,9 +8791,8 @@ exports.asyncGen = asyncGenerator;\n\
 
 Runtime.Polyfill = 
 
-"/*=esdown=*/(function(fn, name) { if (typeof exports !== 'undefined') fn(require, exports, module); else if (typeof self !== 'undefined') fn(null, name === '*' ? self : (name ? self[name] = {} : {})); })(function(require, exports, module) { 'use strict'; var _M3 = {}, _M4 = {}, _M5 = {}, _M6 = {}, _M7 = {}, _M8 = {}, _M9 = {}, _M10 = {}, _M2 = {}, _M1 = exports;\n\
-\n\
-(function(exports) {\n\
+"(function(fn, name) { if (typeof exports !== 'undefined') fn(require, exports, module); else if (typeof self !== 'undefined') fn(void 0, name === '*' ? self : (name ? self[name] = {} : {})); })(function(require, exports, module) { 'use strict'; var __M; (function(a) { var list = Array(a.length / 2); __M = function require(i) { var m = list[i], f, e; if (typeof m !== 'function') return m.exports; f = m; m = { exports: i ? {} : exports }; f(list[i] = m, e = m.exports); if (m.exports !== e && !('default' in m.exports)) m.exports['default'] = m.exports; return m.exports; }; for (var i = 0; i < a.length; i += 2) { var j = Math.abs(a[i]); list[j] = a[i + 1]; if (a[i] >= 0) __M(j); } })([\n\
+2, function(module, exports) {\n\
 \n\
 var Global = (function() {\n\
 \n\
@@ -8900,11 +8889,10 @@ exports.toObject = toObject;\n\
 exports.assertThis = assertThis;\n\
 \n\
 \n\
-})(_M3);\n\
+},\n\
+3, function(module, exports) {\n\
 \n\
-(function(exports) {\n\
-\n\
-var addProperties = _M3.addProperties;\n\
+var addProperties = __M(2).addProperties;\n\
 \n\
 var symbolCounter = 0;\n\
 \n\
@@ -8934,11 +8922,10 @@ function polyfill(global) {\n\
 exports.polyfill = polyfill;\n\
 \n\
 \n\
-})(_M4);\n\
+},\n\
+4, function(module, exports) {\n\
 \n\
-(function(exports) {\n\
-\n\
-var addProperties = _M3.addProperties, toObject = _M3.toObject, toLength = _M3.toLength, toInteger = _M3.toInteger;\n\
+var addProperties = __M(2).addProperties, toObject = __M(2).toObject, toLength = __M(2).toLength, toInteger = __M(2).toInteger;\n\
 \n\
 function arrayFind(obj, pred, thisArg, type) {\n\
 \n\
@@ -9145,11 +9132,10 @@ function polyfill() {\n\
 exports.polyfill = polyfill;\n\
 \n\
 \n\
-})(_M5);\n\
+},\n\
+5, function(module, exports) {\n\
 \n\
-(function(exports) {\n\
-\n\
-var addProperties = _M3.addProperties;\n\
+var addProperties = __M(2).addProperties;\n\
 \n\
 var ORIGIN = {}, REMOVED = {};\n\
 \n\
@@ -9355,11 +9341,10 @@ function polyfill(global) {\n\
 exports.polyfill = polyfill;\n\
 \n\
 \n\
-})(_M6);\n\
+},\n\
+6, function(module, exports) {\n\
 \n\
-(function(exports) {\n\
-\n\
-var toInteger = _M3.toInteger, addProperties = _M3.addProperties;\n\
+var toInteger = __M(2).toInteger, addProperties = __M(2).addProperties;\n\
 \n\
 function isInteger(val) {\n\
 \n\
@@ -9400,11 +9385,10 @@ function polyfill() {\n\
 exports.polyfill = polyfill;\n\
 \n\
 \n\
-})(_M7);\n\
+},\n\
+7, function(module, exports) {\n\
 \n\
-(function(exports) {\n\
-\n\
-var addProperties = _M3.addProperties, toObject = _M3.toObject, sameValue = _M3.sameValue;\n\
+var addProperties = __M(2).addProperties, toObject = __M(2).toObject, sameValue = __M(2).sameValue;\n\
 \n\
 function polyfill() {\n\
 \n\
@@ -9445,11 +9429,10 @@ function polyfill() {\n\
 exports.polyfill = polyfill;\n\
 \n\
 \n\
-})(_M8);\n\
+},\n\
+8, function(module, exports) {\n\
 \n\
-(function(exports) {\n\
-\n\
-var addProperties = _M3.addProperties, global = _M3.global;\n\
+var addProperties = __M(2).addProperties, global = __M(2).global;\n\
 \n\
 var runLater = (function(_) {\n\
 \n\
@@ -9804,16 +9787,15 @@ function polyfill() {\n\
 exports.polyfill = polyfill;\n\
 \n\
 \n\
-})(_M9);\n\
+},\n\
+9, function(module, exports) {\n\
 \n\
-(function(exports) {\n\
-\n\
-var addProperties = _M3.addProperties,\n\
-    toLength = _M3.toLength,\n\
-    toInteger = _M3.toInteger,\n\
-    sameValue = _M3.sameValue,\n\
-    assertThis = _M3.assertThis,\n\
-    isRegExp = _M3.isRegExp;\n\
+var addProperties = __M(2).addProperties,\n\
+    toLength = __M(2).toLength,\n\
+    toInteger = __M(2).toInteger,\n\
+    sameValue = __M(2).sameValue,\n\
+    assertThis = __M(2).assertThis,\n\
+    isRegExp = __M(2).isRegExp;\n\
 \n\
 \n\
 \n\
@@ -9970,9 +9952,9 @@ function polyfill() {\n\
             return string.slice(end - search.length, end) === search;\n\
         },\n\
 \n\
-        contains: function(search) {\n\
+        includes: function(search) {\n\
 \n\
-            assertThis(this, \"String.prototype.contains\");\n\
+            assertThis(this, \"String.prototype.includes\");\n\
 \n\
             var string = String(this),\n\
                 pos = arguments.length > 1 ? arguments[1] : undefined;\n\
@@ -10019,19 +10001,18 @@ function polyfill() {\n\
 exports.polyfill = polyfill;\n\
 \n\
 \n\
-})(_M10);\n\
+},\n\
+1, function(module, exports) {\n\
 \n\
-(function(exports) {\n\
+var global = __M(2).global;\n\
 \n\
-var global = _M3.global;\n\
-\n\
-var symbols = _M4;\n\
-var array = _M5;\n\
-var mapset = _M6;\n\
-var number = _M7;\n\
-var object = _M8;\n\
-var promise = _M9;\n\
-var string = _M10;\n\
+var symbols = __M(3);\n\
+var array = __M(4);\n\
+var mapset = __M(5);\n\
+var number = __M(6);\n\
+var object = __M(7);\n\
+var promise = __M(8);\n\
+var string = __M(9);\n\
 \n\
 \n\
 \n\
@@ -10045,16 +10026,15 @@ exports.global = global;\n\
 exports.polyfill = polyfill;\n\
 \n\
 \n\
-})(_M2);\n\
+},\n\
+0, function(module, exports) {\n\
 \n\
-(function(exports) {\n\
-\n\
-var polyfill = _M2.polyfill;\n\
+var polyfill = __M(1).polyfill;\n\
 \n\
 polyfill();\n\
 \n\
 \n\
-})(_M1);\n\
+}]);\n\
 \n\
 \n\
 }, \"\");";
@@ -11086,7 +11066,7 @@ var Replacer = _esdown.class(function(__) { var Replacer;
 
         var list = this.translatePattern(node.pattern, node.initializer.text);
 
-        return list.join(", ");
+        return list.join(", ") || "__$_";
     },
 
     AssignmentExpression: function(node) {
@@ -11656,7 +11636,7 @@ var WRAP_CALLEE = "(function(fn, name) { " +
 
     // DOM global module:
     "else if (typeof self !== 'undefined') " +
-        "fn(void 0, name === '*' ? self : (name ? self[name] = {} : {})); " +
+        "fn(function() { return {} }, name === '*' ? self : (name ? self[name] = {} : {})); " +
 
 "})";
 
@@ -11680,7 +11660,7 @@ function sanitize(text) {
 function wrapRuntime() {
 
     // Wrap runtime library in an IIFE, exporting into the _esdown variable
-    return "var _esdown = {}; (function(exports) {\n\n" + Runtime.API + "\n\n})(_esdown);";
+    return "var _esdown = {}; (function() { var exports = _esdown;\n\n" + Runtime.API + "\n\n})();";
 }
 
 function wrapPolyfills() {
@@ -11794,11 +11774,19 @@ exports.isWrapped = isWrapped;
 var Path = __M(2);
 var FS = __M(1);
 
-var NODE_PATH = typeof process !== "undefined" && process.env["NODE_PATH"] || "",
-      NOT_PACKAGE = /^(?:\.{0,2}\/|[a-z]+:)/i,
-      isWindows = process.platform === "win32";
 
-var globalModulePaths = (function(_) {
+var NOT_PACKAGE = /^(?:\.{0,2}\/|[a-z]+:)/i,
+    NODE_PATH = "",
+    globalModulePaths = [],
+    isWindows = false;
+
+(function(_) {
+
+    if (typeof process === "undefined")
+        return;
+
+    isWindows = process.platform === "win32";
+    NODE_PATH = process.env["NODE_PATH"] || "";
 
     var home = isWindows ? process.env.USERPROFILE : process.env.HOME,
         paths = [Path.resolve(process.execPath, "..", "..", "lib", "node")];
@@ -11814,7 +11802,7 @@ var globalModulePaths = (function(_) {
     if (nodePath)
         paths = nodePath.split(Path.delimiter).filter(Boolean).concat(paths);
 
-    return paths;
+    globalModulePaths = paths;
 
 })();
 
@@ -12012,7 +12000,10 @@ var parse = __M(8).parse;
 var translate = __M(7).translate;
 var isPackageSpecifier = __M(13).isPackageSpecifier, locateModule = __M(13).locateModule;
 
-var Module = require.main.constructor;
+var Module = null;
+
+try { Module = require.main.constructor }
+catch (x) {}
 
 function formatSyntaxError(e, filename) {
 
@@ -12378,15 +12369,16 @@ var BUNDLE_INIT =
 "(function(a) { " +
     "var list = Array(a.length / 2); " +
 
-    "__M = function require(i) { " +
-        "var m = list[i], f, e; " +
+    "__M = function(i) { " +
+        "var m = list[i], f, e, ee; " +
         "if (typeof m !== 'function') return m.exports; " +
         "f = m; " +
-        "m = i ? { exports: {} } : module || { exports: exports }; " +
+        "m = { exports: i ? {} : exports }; " +
         "f(list[i] = m, e = m.exports); " +
-        "if (m.exports !== e && !('default' in m.exports)) " +
-            "m.exports['default'] = m.exports; " +
-        "return m.exports; " +
+        "ee = m.exports; " +
+        "if (ee && ee !== e && !('default' in ee)) " +
+            "ee['default'] = ee; " +
+        "return ee; " +
     "}; " +
 
     "for (var i = 0; i < a.length; i += 2) { " +
