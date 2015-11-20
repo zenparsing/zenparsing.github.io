@@ -1,6 +1,6 @@
 /*=esdown=*/(function(fn, name) { if (typeof exports !== 'undefined') fn(require, exports, module); else if (typeof self !== 'undefined') fn(function() { return {} }, name === '*' ? self : (name ? self[name] = {} : {})); })(function(require, exports, module) { 'use strict'; var _esdown = {}; (function() { var exports = _esdown;
 
-var VERSION = "1.0.2";
+var VERSION = "1.0.3";
 
 var GLOBAL = (function() {
 
@@ -111,6 +111,13 @@ function asyncFunction(iter) {
             } catch (x) { reject(x) }
         }
     });
+}
+
+// Support for for-await
+function asyncIterator(obj) {
+
+    var method = obj[Symbol.asyncIterator] || obj[Symbol.iterator];
+    return method.call(obj);
 }
 
 // Support for async generators
@@ -316,9 +323,11 @@ function arrayd(obj) {
 
 
 
+
 exports.makeClass = makeClass;
 exports.computed = computed;
 exports.asyncFunction = asyncFunction;
+exports.asyncIterator = asyncIterator;
 exports.asyncGenerator = asyncGenerator;
 exports.spread = spread;
 exports.objd = objd;
@@ -328,6 +337,7 @@ exports.version = VERSION;
 exports.global = GLOBAL;
 exports.async = asyncFunction;
 exports.asyncGen = asyncGenerator;
+exports.asyncIter = asyncIterator;
 
 
 })();
@@ -8459,7 +8469,7 @@ var Runtime = {};
 
 Runtime.API = 
 
-"var VERSION = \"1.0.2\";\n\
+"var VERSION = \"1.0.3\";\n\
 \n\
 var GLOBAL = (function() {\n\
 \n\
@@ -8570,6 +8580,13 @@ function asyncFunction(iter) {\n\
             } catch (x) { reject(x) }\n\
         }\n\
     });\n\
+}\n\
+\n\
+// Support for for-await\n\
+function asyncIterator(obj) {\n\
+\n\
+    var method = obj[Symbol.asyncIterator] || obj[Symbol.iterator];\n\
+    return method.call(obj);\n\
 }\n\
 \n\
 // Support for async generators\n\
@@ -8775,9 +8792,11 @@ function arrayd(obj) {\n\
 \n\
 \n\
 \n\
+\n\
 exports.makeClass = makeClass;\n\
 exports.computed = computed;\n\
 exports.asyncFunction = asyncFunction;\n\
+exports.asyncIterator = asyncIterator;\n\
 exports.asyncGenerator = asyncGenerator;\n\
 exports.spread = spread;\n\
 exports.objd = objd;\n\
@@ -8787,6 +8806,7 @@ exports.version = VERSION;\n\
 exports.global = GLOBAL;\n\
 exports.async = asyncFunction;\n\
 exports.asyncGen = asyncGenerator;\n\
+exports.asyncIter = asyncIterator;\n\
 ";
 
 Runtime.Polyfill = 
@@ -10329,7 +10349,7 @@ var Replacer = _esdown.class(function(__) { var Replacer;
 
         if (node.async) {
 
-            head = "for (var " + (iter) + " = (" + (node.right.text) + ")[Symbol.asyncIterator](), " + (iterResult) + "; ";
+            head = "for (var " + (iter) + " = _esdown.asyncIter(" + (node.right.text) + "), " + (iterResult) + "; ";
             head += "" + (iterResult) + " = " + (this.awaitYield(context, iter + ".next()")) + ", ";
 
         } else {
