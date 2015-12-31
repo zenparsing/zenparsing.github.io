@@ -1,6 +1,6 @@
 /*=esdown=*/(function(fn, name) { if (typeof exports !== 'undefined') fn(exports, module); else if (typeof self !== 'undefined') fn(name === '*' ? self : (name ? self[name] = {} : {})); })(function(exports, module) { 'use strict'; var _esdown = {}; (function() { var exports = _esdown;
 
-var VERSION = "1.0.5";
+var VERSION = "1.0.8";
 
 var GLOBAL = (function() {
 
@@ -123,7 +123,7 @@ function asyncIterator(obj) {
 // Support for async generators
 function asyncGenerator(iter) {
 
-    var current = null;
+    var front = null, back = null;
 
     var aIter = {
 
@@ -139,11 +139,19 @@ function asyncGenerator(iter) {
 
         return new Promise(function(resolve, reject) {
 
-            if (current)
-                throw new Error("Async generator in progress");
+            var x = { type: type, value: value, resolve: resolve, reject: reject, next: null };
 
-            current = { resolve: resolve, reject: reject };
-            resume(type, value);
+            if (back) {
+
+                // If list is not empty, then push onto the end
+                back = back.next = x;
+
+            } else {
+
+                // Create new list and resume generator
+                front = back = x;
+                resume(type, value);
+            }
         });
     }
 
@@ -152,19 +160,22 @@ function asyncGenerator(iter) {
         switch (type) {
 
             case "return":
-                current.resolve({ value: value, done: true });
+                front.resolve({ value: value, done: true });
                 break;
 
             case "throw":
-                current.reject(value);
+                front.reject(value);
                 break;
 
             default:
-                current.resolve({ value: value, done: false });
+                front.resolve({ value: value, done: false });
                 break;
         }
 
-        current = null;
+        front = front.next;
+
+        if (front) resume(front.type, front.value);
+        else back = null;
     }
 
     function resume(type, value) {
@@ -1572,7 +1583,7 @@ var Runtime = {};
 
 Runtime.API = 
 
-"var VERSION = \"1.0.5\";\n\
+"var VERSION = \"1.0.8\";\n\
 \n\
 var GLOBAL = (function() {\n\
 \n\
@@ -1695,7 +1706,7 @@ function asyncIterator(obj) {\n\
 // Support for async generators\n\
 function asyncGenerator(iter) {\n\
 \n\
-    var current = null;\n\
+    var front = null, back = null;\n\
 \n\
     var aIter = {\n\
 \n\
@@ -1711,11 +1722,19 @@ function asyncGenerator(iter) {\n\
 \n\
         return new Promise(function(resolve, reject) {\n\
 \n\
-            if (current)\n\
-                throw new Error(\"Async generator in progress\");\n\
+            var x = { type: type, value: value, resolve: resolve, reject: reject, next: null };\n\
 \n\
-            current = { resolve: resolve, reject: reject };\n\
-            resume(type, value);\n\
+            if (back) {\n\
+\n\
+                // If list is not empty, then push onto the end\n\
+                back = back.next = x;\n\
+\n\
+            } else {\n\
+\n\
+                // Create new list and resume generator\n\
+                front = back = x;\n\
+                resume(type, value);\n\
+            }\n\
         });\n\
     }\n\
 \n\
@@ -1724,19 +1743,22 @@ function asyncGenerator(iter) {\n\
         switch (type) {\n\
 \n\
             case \"return\":\n\
-                current.resolve({ value: value, done: true });\n\
+                front.resolve({ value: value, done: true });\n\
                 break;\n\
 \n\
             case \"throw\":\n\
-                current.reject(value);\n\
+                front.reject(value);\n\
                 break;\n\
 \n\
             default:\n\
-                current.resolve({ value: value, done: false });\n\
+                front.resolve({ value: value, done: false });\n\
                 break;\n\
         }\n\
 \n\
-        current = null;\n\
+        front = front.next;\n\
+\n\
+        if (front) resume(front.type, front.value);\n\
+        else back = null;\n\
     }\n\
 \n\
     function resume(type, value) {\n\
@@ -3138,7 +3160,7 @@ exports.Runtime = Runtime;
 
 
 },
-10, function(module, exports) {
+13, function(module, exports) {
 
 function Node(type, start, end) {
 
@@ -3998,8 +4020,8 @@ functions and give them a common prototype property.
 
 */
 
-var Nodes = __M(10);
-Object.keys(__M(10)).forEach(function(k) { exports[k] = __M(10)[k]; });
+var Nodes = __M(13);
+Object.keys(__M(13)).forEach(function(k) { exports[k] = __M(13)[k]; });
 
 function isNode(x) {
 
@@ -4960,7 +4982,7 @@ exports.LineMap = LineMap;
 
 
 },
-11, function(module, exports) {
+10, function(module, exports) {
 
 var isIdentifierStart = __M(14).isIdentifierStart,
     isIdentifierPart = __M(14).isIdentifierPart,
@@ -5994,10 +6016,10 @@ exports.Scanner = Scanner;
 
 
 },
-12, function(module, exports) {
+11, function(module, exports) {
 
 var AST = __M(9);
-var isReservedWord = __M(11).isReservedWord;
+var isReservedWord = __M(10).isReservedWord;
 
 
 var Transform = _esdown.class(function(__) { var Transform; __({ constructor: Transform = function() {} });
@@ -6206,9 +6228,9 @@ exports.Transform = Transform;
 
 
 },
-13, function(module, exports) {
+12, function(module, exports) {
 
-var isStrictReservedWord = __M(11).isStrictReservedWord;
+var isStrictReservedWord = __M(10).isStrictReservedWord;
 
 
 // Returns true if the specified name is a restricted identifier in strict mode
@@ -6425,9 +6447,9 @@ exports.Validate = Validate;
 7, function(module, exports) {
 
 var AST = __M(9);
-var Scanner = __M(11).Scanner;
-var Transform = __M(12).Transform;
-var Validate = __M(13).Validate;
+var Scanner = __M(10).Scanner;
+var Transform = __M(11).Transform;
+var Validate = __M(12).Validate;
 
 // Returns true if the specified operator is an increment operator
 function isIncrement(op) {
@@ -9976,6 +9998,8 @@ var Replacer = _esdown.class(function(__) { var Replacer;
 
             head = "for (var " + (iter) + " = _esdown.asyncIter(" + (node.right.text) + "), " + (iterResult) + "; ";
             head += "" + (iterResult) + " = " + (this.awaitYield(context, iter + ".next()")) + ", ";
+            head += "" + (iterResult) + ".value && typeof " + (iterResult) + ".value.then === \"function\" ";
+            head += "&& (" + (iterResult) + ".value = " + (this.awaitYield(context, iterResult + ".value")) + "), ";
 
         } else {
 

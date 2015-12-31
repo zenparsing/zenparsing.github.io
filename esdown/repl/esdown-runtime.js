@@ -1,7 +1,7 @@
 /*=esdown=*/(function(fn, name) { if (typeof exports !== 'undefined') fn(exports, module); else if (typeof self !== 'undefined') fn(name === '*' ? self : (name ? self[name] = {} : {})); })(function(exports, module) { 'use strict'; var __M; (function(a) { var list = Array(a.length / 2); __M = function(i) { var m = list[i], f, e, ee; if (typeof m !== 'function') return m.exports; f = m; m = { exports: i ? {} : exports }; f(list[i] = m, e = m.exports); ee = m.exports; if (ee && ee !== e && !('default' in ee)) ee['default'] = ee; return ee; }; for (var i = 0; i < a.length; i += 2) { var j = Math.abs(a[i]); list[j] = a[i + 1]; if (a[i] >= 0) __M(j); } })([
 1, function(module, exports) {
 
-var VERSION = "1.0.7";
+var VERSION = "1.0.8";
 
 var GLOBAL = (function() {
 
@@ -124,7 +124,7 @@ function asyncIterator(obj) {
 // Support for async generators
 function asyncGenerator(iter) {
 
-    var current = null;
+    var front = null, back = null;
 
     var aIter = {
 
@@ -140,11 +140,19 @@ function asyncGenerator(iter) {
 
         return new Promise(function(resolve, reject) {
 
-            if (current)
-                throw new Error("Async generator in progress");
+            var x = { type: type, value: value, resolve: resolve, reject: reject, next: null };
 
-            current = { resolve: resolve, reject: reject };
-            resume(type, value);
+            if (back) {
+
+                // If list is not empty, then push onto the end
+                back = back.next = x;
+
+            } else {
+
+                // Create new list and resume generator
+                front = back = x;
+                resume(type, value);
+            }
         });
     }
 
@@ -153,19 +161,22 @@ function asyncGenerator(iter) {
         switch (type) {
 
             case "return":
-                current.resolve({ value: value, done: true });
+                front.resolve({ value: value, done: true });
                 break;
 
             case "throw":
-                current.reject(value);
+                front.reject(value);
                 break;
 
             default:
-                current.resolve({ value: value, done: false });
+                front.resolve({ value: value, done: false });
                 break;
         }
 
-        current = null;
+        front = front.next;
+
+        if (front) resume(front.type, front.value);
+        else back = null;
     }
 
     function resume(type, value) {
