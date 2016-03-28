@@ -1,4 +1,4 @@
-'use strict'; var VERSION = "1.1.15";
+'use strict'; (function(fn, name) { if (typeof exports !== 'undefined') fn(exports, module); else if (typeof self !== 'undefined') fn(name === '*' ? self : (name ? self[name] = {} : {})); })(function(exports, module) { var VERSION = "1.1.15";
 
 var GLOBAL = (function() {
 
@@ -318,3 +318,6 @@ exports.global = GLOBAL;
 exports.async = asyncFunction;
 exports.asyncGen = asyncGenerator;
 exports.asyncIter = asyncIterator;
+
+
+}, "_esdown");
