@@ -1,7 +1,4 @@
-/*=esdown=*/(function(fn, name) { if (typeof exports !== 'undefined') fn(exports, module); else if (typeof self !== 'undefined') fn(name === '*' ? self : (name ? self[name] = {} : {})); })(function(exports, module) { 'use strict'; var __M; (function(a) { var list = Array(a.length / 2); __M = function(i) { var m = list[i], f, e, ee; if (typeof m !== 'function') return m.exports; f = m; m = { exports: i ? {} : exports }; f(list[i] = m, e = m.exports); ee = m.exports; if (ee && ee !== e && !('default' in ee)) ee['default'] = ee; return ee; }; for (var i = 0; i < a.length; i += 2) { var j = Math.abs(a[i]); list[j] = a[i + 1]; if (a[i] >= 0) __M(j); } })([
-1, function(module, exports) {
-
-var VERSION = "1.0.8";
+'use strict'; var VERSION = "1.1.15";
 
 var GLOBAL = (function() {
 
@@ -156,7 +153,7 @@ function asyncGenerator(iter) {
         });
     }
 
-    function fulfill(type, value) {
+    function settle(type, value) {
 
         switch (type) {
 
@@ -206,18 +203,16 @@ function asyncGenerator(iter) {
 
             } else {
 
-                Promise.resolve(value).then(
-                    function(x) { return fulfill(result$1.done ? "return" : "normal", x); },
-                    function(x) { return fulfill("throw", x); });
+                settle(result$1.done ? "return" : "normal", result$1.value);
             }
 
         } catch (x) {
 
             // HACK: Return-as-throw
             if (x && x.__return === true)
-                return fulfill("return", x.value);
+                return settle("return", x.value);
 
-            fulfill("throw", x);
+            settle("throw", x);
         }
     }
 }
@@ -323,18 +318,3 @@ exports.global = GLOBAL;
 exports.async = asyncFunction;
 exports.asyncGen = asyncGenerator;
 exports.asyncIter = asyncIterator;
-
-
-},
-0, function(module, exports) {
-
-var _esdown = __M(1);
-
-// Polyfill into global environment
-_esdown.global._esdown = _esdown;
-
-
-}]);
-
-
-}, "");
