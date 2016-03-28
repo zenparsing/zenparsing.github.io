@@ -1578,7 +1578,7 @@ polyfill();
 })();
 
 var __M; (function(a) { var list = Array(a.length / 2); __M = function(i, es) { var m = list[i], f, e; if (typeof m === 'function') { f = m; m = { exports: i ? {} : exports }; f(list[i] = m, m.exports); e = m.exports; m.es = Object(e) !== e || e.constructor === Object ? e : Object.create(e, { 'default': { value: e } }); } return es ? m.es : m.exports; }; for (var i = 0; i < a.length; i += 2) { var j = Math.abs(a[i]); list[j] = a[i + 1]; if (a[i] >= 0) __M(j); } })([
-4, function(module, exports) {
+3, function(module, exports) {
 
 'use strict'; var Runtime = {};
 
@@ -4012,7 +4012,7 @@ exports.ExportSpecifier = ExportSpecifier;
 
 
 },
-10, function(module, exports) {
+9, function(module, exports) {
 
 'use strict'; /*
 
@@ -4065,7 +4065,7 @@ Object.keys(Nodes).forEach(function(k) { return Nodes[k].prototype = NodeBase.pr
 
 
 },
-19, function(module, exports) {
+16, function(module, exports) {
 
 'use strict'; // Unicode 6.3.0 | 2013-09-25, 18:58:50 GMT [MD]
 
@@ -4833,9 +4833,9 @@ exports.WHITESPACE = WHITESPACE;
 
 
 },
-17, function(module, exports) {
+14, function(module, exports) {
 
-'use strict'; var IDENTIFIER = __M(19, 1).IDENTIFIER, WHITESPACE = __M(19, 1).WHITESPACE;
+'use strict'; var IDENTIFIER = __M(16, 1).IDENTIFIER, WHITESPACE = __M(16, 1).WHITESPACE;
 
 function binarySearch(table, val) {
 
@@ -4933,7 +4933,7 @@ exports.codePointString = codePointString;
 
 
 },
-18, function(module, exports) {
+15, function(module, exports) {
 
 'use strict'; // Performs a binary search on an array
 function binarySearch(array, val) {
@@ -4984,20 +4984,20 @@ exports.LineMap = LineMap;
 
 
 },
-14, function(module, exports) {
+10, function(module, exports) {
 
-'use strict'; var isIdentifierStart = __M(17, 1).isIdentifierStart,
-    isIdentifierPart = __M(17, 1).isIdentifierPart,
-    isWhitespace = __M(17, 1).isWhitespace,
-    codePointLength = __M(17, 1).codePointLength,
-    codePointAt = __M(17, 1).codePointAt,
-    codePointString = __M(17, 1).codePointString;
-
-
+'use strict'; var isIdentifierStart = __M(14, 1).isIdentifierStart,
+    isIdentifierPart = __M(14, 1).isIdentifierPart,
+    isWhitespace = __M(14, 1).isWhitespace,
+    codePointLength = __M(14, 1).codePointLength,
+    codePointAt = __M(14, 1).codePointAt,
+    codePointString = __M(14, 1).codePointString;
 
 
 
-var LineMap = __M(18, 1).LineMap;
+
+
+var LineMap = __M(15, 1).LineMap;
 
 var identifierEscape = /\\u([0-9a-fA-F]{4})/g,
       newlineSequence = /\r\n?|[\n\u2028\u2029]/g,
@@ -6018,10 +6018,10 @@ exports.Scanner = Scanner;
 
 
 },
-15, function(module, exports) {
+11, function(module, exports) {
 
-'use strict'; var AST = __M(10, 1);
-var isReservedWord = __M(14, 1).isReservedWord;
+'use strict'; var AST = __M(9, 1);
+var isReservedWord = __M(10, 1).isReservedWord;
 
 
 var Transform = _esdown.class(function(__) { var Transform; __({ constructor: Transform = function() {} });
@@ -6230,9 +6230,9 @@ exports.Transform = Transform;
 
 
 },
-16, function(module, exports) {
+12, function(module, exports) {
 
-'use strict'; var isStrictReservedWord = __M(14, 1).isStrictReservedWord;
+'use strict'; var isStrictReservedWord = __M(10, 1).isStrictReservedWord;
 
 
 // Returns true if the specified name is a restricted identifier in strict mode
@@ -6446,12 +6446,12 @@ exports.Validate = Validate;
 
 
 },
-8, function(module, exports) {
+7, function(module, exports) {
 
-'use strict'; var AST = __M(10, 1);
-var Scanner = __M(14, 1).Scanner;
-var Transform = __M(15, 1).Transform;
-var Validate = __M(16, 1).Validate;
+'use strict'; var AST = __M(9, 1);
+var Scanner = __M(10, 1).Scanner;
+var Transform = __M(11, 1).Transform;
+var Validate = __M(12, 1).Validate;
 
 // Returns true if the specified operator is an increment operator
 function isIncrement(op) {
@@ -9317,7 +9317,7 @@ exports.Parser = Parser;
 
 
 },
-9, function(module, exports) {
+8, function(module, exports) {
 
 'use strict'; // TODO:  How do we deal with the insanity that is with statements?
 // TODO:  Param scopes have empty free lists, which is strange
@@ -9684,11 +9684,11 @@ exports.ScopeResolver = ScopeResolver;
 
 
 },
-3, function(module, exports) {
+6, function(module, exports) {
 
-'use strict'; var Parser = __M(8, 1).Parser;
-var ScopeResolver = __M(9, 1).ScopeResolver;
-var AST = __M(10, 1);
+'use strict'; var Parser = __M(7, 1).Parser;
+var ScopeResolver = __M(8, 1).ScopeResolver;
+var AST = __M(9, 1);
 
 function addParentLinks(node) {
 
@@ -9727,11 +9727,11 @@ exports.parse = parse;
 },
 2, function(module, exports) {
 
-'use strict'; Object.keys(__M(3, 1)).forEach(function(k) { exports[k] = __M(3, 1)[k]; });
+'use strict'; Object.keys(__M(6, 1)).forEach(function(k) { exports[k] = __M(6, 1)[k]; });
 
 
 },
-5, function(module, exports) {
+4, function(module, exports) {
 
 'use strict'; var parse = __M(2, 1).parse, AST = __M(2, 1).AST;
 
@@ -11306,258 +11306,21 @@ exports.replaceText = replaceText;
 
 
 },
-11, function(m) { m.exports = require("path") },
-12, function(m) { m.exports = require("fs") },
-6, function(module, exports) {
+5, function(module, exports) {
 
-'use strict'; var Path = __M(11, 1);
-var FS = __M(12, 1);
+'use strict'; var NODE_SCHEME = /^node:/i,
+      URI_SCHEME = /^[a-z]+:/i,
+      NOT_PACKAGE = /^(?:\.{0,2}\/|[a-z]+:)/i;
 
 var NODE_INTERNAL_MODULE = new RegExp("^(?:" + [
 
-    "assert", "buffer", "child_process", "cluster", "console", "constants", "crypto",
-    "dgram", "dns", "domain", "events", "freelist", "fs", "http", "https", "module",
-    "net", "os", "path", "process", "punycode", "querystring", "readline", "repl",
-    "smalloc", "stream", "string_decoder", "sys", "timers", "tls", "tty", "url", "util",
-    "v8", "vm", "zlib",
+  "assert", "buffer", "child_process", "cluster", "console", "constants", "crypto",
+  "dgram", "dns", "domain", "events", "freelist", "fs", "http", "https", "module",
+  "net", "os", "path", "process", "punycode", "querystring", "readline", "repl",
+  "smalloc", "stream", "string_decoder", "sys", "timers", "tls", "tty", "url", "util",
+  "v8", "vm", "zlib",
 
 ].join("|") + ")$");
-
-var NOT_PACKAGE = /^(?:\.{0,2}\/|[a-z]+:)/i,
-    NODE_PATH = "",
-    globalModulePaths = [],
-    isWindows = false;
-
-(function(_) {
-
-    if (typeof process === "undefined")
-        return;
-
-    isWindows = process.platform === "win32";
-    NODE_PATH = process.env["NODE_PATH"] || "";
-
-    var home = isWindows ? process.env.USERPROFILE : process.env.HOME,
-        paths = [Path.resolve(process.execPath, "..", "..", "lib", "node")];
-
-    if (home) {
-
-        paths.unshift(Path.resolve(home, ".node_libraries"));
-        paths.unshift(Path.resolve(home, ".node_modules"));
-    }
-
-    var nodePath = process.env.NODE_PATH;
-
-    if (nodePath)
-        paths = nodePath.split(Path.delimiter).filter(Boolean).concat(paths);
-
-    globalModulePaths = paths;
-
-})();
-
-function isFile(path) {
-
-    var stat;
-
-    try { stat = FS.statSync(path) }
-    catch (x) {}
-
-    return stat && stat.isFile();
-}
-
-function isDirectory(path) {
-
-    var stat;
-
-    try { stat = FS.statSync(path) }
-    catch (x) {}
-
-    return stat && stat.isDirectory();
-}
-
-function getFolderEntryPoint(dir, legacy) {
-
-    var join = Path.join;
-
-    // Look for an ES entry point first (default.js)
-    if (!legacy) {
-
-        var path$0 = join(dir, "default.js");
-
-        if (isFile(path$0))
-            return { path: path$0, legacy: false };
-    }
-
-    // == Legacy package lookup rules ==
-
-    var tryPaths = [];
-
-    // Look for a package.json manifest file
-    var main = (readPackageManifest(dir) || {}).main;
-
-    // If we have a manifest with a "main" path...
-    if (typeof main === "string") {
-
-        if (!main.endsWith("/"))
-            tryPaths.push(join(dir, main), join(dir, main + ".js"));
-
-        tryPaths.push(join(dir, main, "index.js"));
-    }
-
-    // Try "index"
-    tryPaths.push(join(dir, "index.js"));
-
-    for (var i$0 = 0; i$0 < tryPaths.length; ++i$0) {
-
-        var path$1 = tryPaths[i$0];
-
-        if (isFile(path$1))
-            return { path: path$1, legacy: true };
-    }
-
-    return null;
-}
-
-function readPackageManifest(path) {
-
-    path = Path.join(path, "package.json");
-
-    if (!isFile(path))
-        return null;
-
-    var text = FS.readFileSync(path, "utf8");
-
-    try {
-
-        return JSON.parse(text);
-
-    } catch (e) {
-
-        e.message = "Error parsing " + path + ": " + e.message;
-        throw e;
-    }
-}
-
-function locateModule(path, base, legacy) {
-
-    if (isPackageSpecifier(path))
-        return locatePackage(path, base, legacy);
-
-    // If the module specifier is neither a package path nor a "file" path,
-    // then just return the specifier itself.  The locator does not have
-    // enough information to locate it with any greater precision.
-    if (!path.startsWith(".") && !path.startsWith("/"))
-        throw new Error("Invalid module path");
-
-    path = Path.resolve(base, path);
-
-    if (isDirectory(path)) {
-
-        // If the path is a directory, then attempt to find the entry point
-        // using folder lookup rules
-        var pathInfo$0 = getFolderEntryPoint(path, legacy);
-
-        if (pathInfo$0)
-            return pathInfo$0;
-    }
-
-    if (isFile(path))
-        return { path: path, legacy: legacy };
-
-    // If we are performing legacy lookup and the path is not found, then
-    // attempt to find the file by appending a ".js" or ".json" file extension.
-    if (legacy && !path.endsWith("/")) {
-
-        if (isFile(path + ".js"))
-            return { path: path + ".js", legacy: legacy };
-
-        if (isFile(path + ".json"))
-            return { path: path + ".json", legacy: legacy };
-    }
-
-    throw new Error("Module " + (path) + " could not be found");
-}
-
-function isRelativePath(spec) {
-
-    return spec.startsWith(".") || spec.startsWith("/");
-}
-
-function isPackageSpecifier(spec) {
-
-    return !NOT_PACKAGE.test(spec);
-}
-
-function isNodeModule(specifier) {
-
-    return NODE_INTERNAL_MODULE.test(specifier);
-}
-
-function locatePackage(name, base, legacy) {
-
-    if (NOT_PACKAGE.test(name))
-        throw new Error("Not a package specifier");
-
-    var pathInfo;
-
-    getPackagePaths(base).some(function(path) {
-
-        path = Path.resolve(path, name);
-        pathInfo = getFolderEntryPoint(path, legacy);
-
-        if (!pathInfo && legacy) {
-
-            if (isFile(path + ".js"))
-                pathInfo = { path: path + ".js", legacy: legacy };
-        }
-
-        return Boolean(pathInfo);
-    });
-
-    if (!pathInfo)
-        throw new Error("Package " + (name) + " could not be found");
-
-    return pathInfo;
-}
-
-function getPackagePaths(dir) {
-
-    return nodeModulePaths(dir).concat(globalModulePaths);
-}
-
-function nodeModulePaths(path) {
-
-    path = Path.resolve(path);
-
-    var parts = path.split(isWindows ? /[\/\\]/ : /\//),
-        paths = [];
-
-    // Build a list of "node_modules" folder paths, starting from
-    // the current directory and then under each parent directory
-    for (var i$1 = parts.length - 1; i$1 >= 0; --i$1) {
-
-        // If this folder is already a node_modules folder, then
-        // skip it (we want to avoid "node_modules/node_modules")
-        if (parts[i$1] === "node_modules")
-            continue;
-
-        paths.push(parts.slice(0, i$1 + 1).join(Path.sep) + Path.sep + "node_modules");
-    }
-
-    return paths;
-}
-
-exports.locateModule = locateModule;
-exports.isRelativePath = isRelativePath;
-exports.isPackageSpecifier = isPackageSpecifier;
-exports.isNodeModule = isNodeModule;
-exports.locatePackage = locatePackage;
-
-
-},
-7, function(module, exports) {
-
-'use strict'; var NODE_SCHEME = /^node:/i,
-      URI_SCHEME = /^[a-z]+:/i;
 
 function isLegacyScheme(spec) {
 
@@ -11579,19 +11342,36 @@ function addLegacyScheme(uri) {
     return "node:" + uri;
 }
 
+function isRelativePath(spec) {
+
+    return spec.startsWith(".") || spec.startsWith("/");
+}
+
+function isPackageSpecifier(spec) {
+
+    return !NOT_PACKAGE.test(spec);
+}
+
+function isNodeModule(specifier) {
+
+    return NODE_INTERNAL_MODULE.test(specifier);
+}
+
 exports.isLegacyScheme = isLegacyScheme;
 exports.removeScheme = removeScheme;
 exports.hasScheme = hasScheme;
 exports.addLegacyScheme = addLegacyScheme;
+exports.isRelativePath = isRelativePath;
+exports.isPackageSpecifier = isPackageSpecifier;
+exports.isNodeModule = isNodeModule;
 
 
 },
 1, function(module, exports) {
 
-'use strict'; var Runtime = __M(4, 1).Runtime;
-var replaceText = __M(5, 1).replaceText;
-var isNodeModule = __M(6, 1).isNodeModule;
-var isLegacyScheme = __M(7, 1).isLegacyScheme, removeScheme = __M(7, 1).removeScheme;
+'use strict'; var Runtime = __M(3, 1).Runtime;
+var replaceText = __M(4, 1).replaceText;
+var isNodeModule = __M(5, 1).isNodeModule, isLegacyScheme = __M(5, 1).isLegacyScheme, removeScheme = __M(5, 1).removeScheme;
 
 var WRAP_CALLEE = "(function(fn, name) { " +
 
