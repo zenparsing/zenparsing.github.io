@@ -1,6 +1,6 @@
 (function(fn, name) { if (typeof exports !== 'undefined') fn(exports, module); else if (typeof self !== 'undefined') fn(name === '*' ? self : (name ? self[name] = {} : {})); })(function(exports, module) { var _esdown = {}; (function() { var exports = _esdown;
 
-var VERSION = "1.1.15";
+var VERSION = "1.1.16";
 
 var GLOBAL = (function() {
 
@@ -1584,7 +1584,7 @@ var __M; (function(a) { var list = Array(a.length / 2); __M = function(i, es) { 
 
 Runtime.API = 
 
-"var VERSION = \"1.1.15\";\n\
+"var VERSION = \"1.1.16\";\n\
 \n\
 var GLOBAL = (function() {\n\
 \n\
@@ -3818,12 +3818,11 @@ function EmptyClassElement(start, end) {
     this.end = end;
 }
 
-function PrivateDeclaration(isStatic, name, initializer, start, end) {
+function PrivateFieldDefinition(name, initializer, start, end) {
 
-    this.type = "PrivateDeclaration";
+    this.type = "PrivateFieldDefinition";
     this.start = start;
     this.end = end;
-    this.static = isStatic;
     this.name = name;
     this.initializer = initializer;
 }
@@ -3997,7 +3996,7 @@ exports.ClassDeclaration = ClassDeclaration;
 exports.ClassExpression = ClassExpression;
 exports.ClassBody = ClassBody;
 exports.EmptyClassElement = EmptyClassElement;
-exports.PrivateDeclaration = PrivateDeclaration;
+exports.PrivateFieldDefinition = PrivateFieldDefinition;
 exports.ImportDeclaration = ImportDeclaration;
 exports.NamespaceImport = NamespaceImport;
 exports.NamedImports = NamedImports;
@@ -6367,19 +6366,44 @@ var Validate = _esdown.class(function(__) { var Validate; __({ constructor: Vali
     },
 
     // Performs validation on the init portion of a for-in or for-of statement
-    checkForInit: function(init, type) {
+    checkForInit: function(init, iterationType) { var __this = this; 
+
+        if (!init)
+            return;
+        
+        if (!iterationType) {
+
+            if (init.type !== "VariableDeclaration")
+                return;
+
+            init.declarations.forEach(function(decl) {
+
+                if (decl.initializer)
+                    return;
+
+                // Enforce const intilization in for(;;)
+                if (init.kind === "const")
+                    __this.fail("Missing const initializer", decl.pattern);
+
+                // Enforce pattern initialization in for(;;)
+                if (decl.pattern.type !== "Identifier")
+                    __this.fail("Missing pattern initializer", decl.pattern);
+            });
+
+            return;
+        }
 
         if (init.type === "VariableDeclaration") {
 
             // For-in/of may only have one variable declaration
             if (init.declarations.length !== 1)
-                this.fail("for-" + type + " statement may not have more than one variable declaration", init);
+                this.fail("for-" + iterationType + " statement may not have more than one variable declaration", init);
 
             var decl$0 = init.declarations[0];
 
             // Initializers are not allowed in for in and for of
             if (decl$0.initializer)
-                this.fail("Invalid initializer in for-" + type + " statement", init);
+                this.fail("Invalid initializer in for-" + iterationType + " statement", init);
 
         } else {
 
@@ -6615,7 +6639,7 @@ var Context = _esdown.class(function(__) { var Context;
         this.isGenerator = false;
         this.isAsync = false;
         this.isMethod = false;
-        this.isConstructor = false;
+        this.allowSuperCall = false;
         this.hasYieldAwait = false;
         this.labelMap = null;
         this.switchDepth = 0;
@@ -6930,7 +6954,7 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
 
     // == Context Management ==
 
-    pushContext: function(isArrow) {
+    pushContext: function(lexical) {
 
         var parent = this.context,
             c = new Context(parent);
@@ -6940,10 +6964,10 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
         if (parent.mode === "strict")
             c.mode = "strict";
 
-        if (isArrow) {
+        if (lexical) {
 
             c.isMethod = parent.isMethod;
-            c.isConstructor = parent.isConstructor;
+            c.allowSuperCall = parent.allowSuperCall;
         }
 
         return c;
@@ -6958,7 +6982,7 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
         c.isGenerator = parent.isGenerator;
         c.isAsync = parent.isAsync;
         c.isMethod = parent.isMethod;
-        c.isConstructor = parent.isConstructor;
+        c.allowSuperCall = parent.allowSuperCall;
         c.functionBody = parent.functionBody;
     },
 
@@ -7343,17 +7367,14 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
 
                 case "(":
 
-                    if (isSuper) {
-
-                        if (!allowCall || !this.context.isConstructor)
-                            this.fail("Invalid super call");
-                    }
-
                     if (!allowCall) {
 
                         exit = true;
                         break;
                     }
+
+                    if (isSuper && !this.context.allowSuperCall)
+                        this.fail("Invalid super call");
 
                     if (keywordFromNode(expr) === "async" && !token.newlineBefore) {
 
@@ -7454,6 +7475,9 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
         var expr = this.MemberExpression(false),
             args = this.peek("div") === "(" ? this.ArgumentList() : null;
 
+        if (expr.type === "SuperKeyword")
+            this.fail("Invalid super keyword", expr);
+
         return new AST.NewExpression(expr, args, start, this.nodeEnd());
     },
 
@@ -7523,6 +7547,7 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
             case "{": return this.ObjectLiteral();
             case "(": return this.ParenExpression();
             case "[": return this.ArrayLiteral();
+            case "ATNAME": return this.AtName();
 
             case "IDENTIFIER":
 
@@ -7594,7 +7619,6 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
 
     AtName: function() {
 
-        // TODO:  Only allow within class?  What about nested classes?
         var token = this.readToken("ATNAME");
         return new AST.AtName(token.value, token.start, token.end);
     },
@@ -7801,7 +7825,7 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
         return this.MethodDefinition(name, "");
     },
 
-    PropertyName: function(allowAtNames) {
+    PropertyName: function() {
 
         var token = this.peekToken("name");
 
@@ -7811,9 +7835,6 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
             case "STRING": return this.StringLiteral();
             case "NUMBER": return this.NumberLiteral();
             case "[": return this.ComputedPropertyName();
-            case "ATNAME":
-                if (allowAtNames) return this.AtName();
-                else break;
         }
 
         this.unexpected(token);
@@ -8061,13 +8082,12 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
 
         if ((!noIn && pattern.type !== "Identifier") || this.peek() === "=") {
 
-            // NOTE: Patterns must have initializers when not in declaration
-            // section of a for statement
-
+            // Patterns must have initializers when not in declaration section
+            // of a for statement
             this.read();
             init = this.AssignmentExpression(noIn);
 
-        } else if (kind === "const") {
+        } else if (!noIn && kind === "const") {
 
             this.fail("Missing const initializer", pattern);
         }
@@ -8285,6 +8305,8 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
 
         if (init && this.peek() === "in")
             return this.ForInStatement(init, start);
+
+        this.checkForInit(init, "");
 
         this.read(";");
         test = this.peek() === ";" ? null : this.Expression();
@@ -8631,7 +8653,7 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
             this.nodeEnd());
     },
 
-    MethodDefinition: function(name, kind, isClass) {
+    MethodDefinition: function(name, kind, classKind) {
 
         var start = name ? name.start : this.nodeStart();
 
@@ -8640,12 +8662,12 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
             this.read();
 
             kind = "generator";
-            name = this.PropertyName(isClass);
+            name = this.PropertyName();
 
         } else {
 
             if (!name)
-                name = this.PropertyName(isClass);
+                name = this.PropertyName();
 
             var val$0 = keywordFromNode(name);
 
@@ -8667,9 +8689,11 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
         }
 
         this.pushContext();
-        this.setFunctionType(kind);
         this.context.isMethod = true;
-        this.context.isConstructor = kind === "constructor";
+        this.setFunctionType(kind);
+
+        if (kind === "constructor" && classKind === "derived")
+            this.context.allowSuperCall = true;
 
         var params = kind === "get" || kind === "set" ?
             this.AccessorParameters(kind) :
@@ -8806,6 +8830,7 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
     ClassDeclaration: function() {
 
         var start = this.nodeStart(),
+            kind = "base",
             ident = null,
             base = null;
 
@@ -8816,13 +8841,14 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
         if (this.peek() === "extends") {
 
             this.read();
+            kind = "derived";
             base = this.MemberExpression(true);
         }
 
         return new AST.ClassDeclaration(
             ident,
             base,
-            this.ClassBody(),
+            this.ClassBody(kind),
             start,
             this.nodeEnd());
     },
@@ -8830,6 +8856,7 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
     ClassExpression: function() {
 
         var start = this.nodeStart(),
+            kind = "base",
             ident = null,
             base = null;
 
@@ -8841,18 +8868,19 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
         if (this.peek() === "extends") {
 
             this.read();
+            kind = "derived";
             base = this.MemberExpression(true);
         }
 
         return new AST.ClassExpression(
             ident,
             base,
-            this.ClassBody(),
+            this.ClassBody(kind),
             start,
             this.nodeEnd());
     },
 
-    ClassBody: function() {
+    ClassBody: function(classKind) {
 
         var start = this.nodeStart(),
             hasConstructor = false,
@@ -8860,13 +8888,13 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
             atNames = new AtNameSet(this),
             list = [];
 
-        this.pushContext();
+        this.pushContext(true);
         this.setStrict(true);
         this.read("{");
 
         while (this.peekUntil("}", "name")) {
 
-            var elem$0 = this.ClassElement();
+            var elem$0 = this.ClassElement(classKind);
 
             switch (elem$0.type) {
 
@@ -8879,11 +8907,9 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
 
                         hasConstructor = true;
                     }
-
-                    atNames.add(elem$0.name, elem$0.kind);
                     break;
 
-                case "PrivateDeclaration":
+                case "PrivateFieldDefinition":
                     atNames.add(elem$0.name, "");
                     break;
             }
@@ -8897,9 +8923,10 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
         return new AST.ClassBody(list, start, this.nodeEnd());
     },
 
-    PrivateDeclaration: function(start, isStatic) {
+    PrivateFieldDefinition: function() {
 
-        var name = this.AtName(),
+        var start = this.nodeStart(),
+            name = this.AtName(),
             init = null;
 
         if (this.peek() === "=") {
@@ -8910,7 +8937,7 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
 
         this.Semicolon();
 
-        return new AST.PrivateDeclaration(isStatic, name, init, start, this.nodeEnd());
+        return new AST.PrivateFieldDefinition(name, init, start, this.nodeEnd());
     },
 
     EmptyClassElement: function() {
@@ -8922,7 +8949,7 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
         return new AST.EmptyClassElement(start, this.nodeEnd());
     },
 
-    ClassElement: function() {
+    ClassElement: function(classKind) {
 
         var token = this.peekToken("name"),
             start = token.start,
@@ -8931,8 +8958,10 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
         if (token.type === ";")
             return this.EmptyClassElement();
 
-        if (token.type === "IDENTIFIER" &&
-            token.value === "static") {
+        if (token.type === "ATNAME")
+            return this.PrivateFieldDefinition();
+
+        if (token.type === "IDENTIFIER" && token.value === "static") {
 
             switch (this.peekAt("name", 1)) {
 
@@ -8941,32 +8970,31 @@ var Parser = _esdown.class(function(__) { var Parser; __({ constructor: Parser =
 
                 default:
                     this.read();
+                    token = this.peekToken("name");
                     isStatic = true;
             }
         }
-
-        if (this.peek("name") === "ATNAME" && this.peekAt("name", 1) !== "(")
-            return this.PrivateDeclaration(start, isStatic);
-
-        token = this.peekToken("name");
 
         var kind = "";
 
         if (!isStatic && token.type === "IDENTIFIER" && token.value === "constructor")
             kind = "constructor";
 
-        var method = this.MethodDefinition(null, kind, true),
+        var method = this.MethodDefinition(null, kind, classKind),
             name = method.name;
 
-        if (isStatic) {
+        if (name.type === "Identifier") {
 
-            if (name.type === "Identifier" && name.value === "prototype")
-                this.fail("Invalid prototype property in class definition", name);
+            if (isStatic) {
 
-        } else if (name.type === "Identifier" && name.value === "constructor") {
+                if (name.value === "prototype")
+                    this.fail("Invalid prototype property in class definition", name);
 
-            if (method.kind !== "constructor")
-                this.fail("Invalid constructor property in class definition", name);
+            } else {
+
+                if (name.value === "constructor" && method.kind !== "constructor")
+                    this.fail("Invalid constructor property in class definition", name);
+            }
         }
 
         method.start = start;
