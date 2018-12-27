@@ -45,6 +45,7 @@ const NO_OUTPUT = {};
 const NEWLINE = /\r\n?|\n/g;
 
 function Literal(text) { this.text = text }
+function HtmlLiteral(html) { this.html = html }
 
 const compilerContext = new Map();
 
@@ -53,9 +54,10 @@ let input;
 let hidden;
 let prompt;
 let bufferedInput = '';
+let helpHTML = '';
 
 const replCommands = {
-  help() { return new Literal(HELP_TEXT) },
+  help() { return new HtmlLiteral(helpHTML) },
   clear() { return clearLines(1), NO_OUTPUT },
   load(url) { return loadScript(url), NO_OUTPUT },
   translate(code) { return new Literal(compile(code).output) },
@@ -206,6 +208,7 @@ function replRun() {
       output =
         error ? formatError(error) :
         result instanceof Literal ? escapeHTML(result.text) :
+        result instanceof HtmlLiteral ? result.html :
         prettyPrint(result, { stylize: stylize, isOpaque: isOpaque });
     }
 
@@ -250,10 +253,10 @@ function advanceInput(fn) {
 }
 
 function clearLines(max) {
-  let list = terminal.getElementsByTagName('div');
-
-  for (let count = list.length; count-- > max;) {
-    terminal.removeChild(list[0]);
+  let list = elems('#terminal > div');
+  let count = Math.max(0, list.length - max);
+  for (let i = 0; i < count; ++i) {
+    terminal.removeChild(list[i]);
   }
 }
 
@@ -414,6 +417,7 @@ function main() {
   input = elem('#terminal-input');
   hidden = createHidden();
   prompt = elem('#terminal div.input-line span');
+  helpHTML = '<div class="repl-help">' + elem('#repl-help-template').innerHTML + '</div>';
 
   terminal.addEventListener('click', onClick, false);
   input.addEventListener('keypress', onKeyPress, false);
@@ -437,6 +441,8 @@ function main() {
   window.onerror = function(error) {
     addLine(formatError(error));
   };
+
+  addLine(helpHTML);
 
   loadFromHash();
 }

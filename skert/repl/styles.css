@@ -3,7 +3,7 @@
   top: 0;
   bottom: 0;
   left: 0;
-  right: 40%;
+  right: 0;
   padding: 4px;
   overflow: auto;
 }
@@ -61,53 +61,48 @@ div.output-line {
   left: 0px;
 }
 
-#content {
-  font: 16px Arial;
-  background-color: #fff;
-  color: #000;
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 60%;
-  right: 0;
-  overflow: auto;
-  padding: 20px;
+#repl-help-template {
+  display: none;
 }
 
-#content :first-child {
-  margin-top: 0;
+div.repl-help {
+  white-space: normal;
+  padding: 15px 0 15px 0;
 }
 
-#content :last-child {
-  margin-bottom: 40px;
+.repl-help h1 {
+  font-size: 1.5em;
+  margin: 0 0 20px 0;
+  padding: 0;
 }
 
-#content h1 {
-  font-size: 2.6em;
+.repl-help h2 {
+  font-size: 1.2em;
+  margin: 20px 0;
 }
 
-#content a {
+.repl-help p {
+  margin: 10px 0;
+  padding: 0;
+}
+
+.repl-help a {
   text-decoration: none;
 }
 
-#content a:hover {
+.repl-help a:hover {
   text-decoration: underline;
 }
 
-#content table {
-  width: 100%;
-  border-spacing: 0;
-  border-collapse: collapse;
-  border: solid 1px #eee;
+.repl-help td {
+  vertical-align: top;
+  padding: 5px 16px 5px 0;
 }
 
-#content td {
-  border-bottom: solid 1px #eee;
-  padding: 5px 8px;
-}
-
-#content code {
-  font: 14px "Consolas", "Monaco", monospace;
+.repl-help td:first-child {
+  font-style: italic;
+  font-weight: bold;
+  padding-right: 40px;
 }
 
 
@@ -122,13 +117,3 @@ div.output-line {
 .js-name {}
 .js-ok { color: green }
 .js-error { color: red }
-
-@media (max-width: 850px) {
-  #terminal {
-    right: 0;
-  }
-
-  #content {
-    display: none;
-  }
-}
