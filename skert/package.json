@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "dependencies": {
+    "@zenparsing/skert": "0.0.5",
+    "rollup": "^0.68.2",
+    "rollup-plugin-commonjs": "^9.2.0",
+    "rollup-plugin-node-resolve": "^4.0.0",
+    "straylight": "^0.3.9"
+  }
+}

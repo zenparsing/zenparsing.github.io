@@ -1,6 +1,4 @@
 // Adapted from node's util.inspect
-(function() { "use strict";
-
 function inspect(obj, opts) {
   // default options
   var ctx = {
@@ -398,6 +396,4 @@ function hasOwnProperty(obj, prop) {
   return Object.prototype.hasOwnProperty.call(obj, prop);
 }
 
-window.prettyPrint = inspect;
-
-})();
+export { inspect as prettyPrint };

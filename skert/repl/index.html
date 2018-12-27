@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>SkertJS REPL</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" type="text/css" href="styles.css" />
+<script src="main.js"></script>
+</head>
+<body>
+
+<div id="terminal">
+    <div class="input-line">
+        <span class="prompt"></span>
+        <textarea id="terminal-input" spellcheck="false" rows="2"></textarea>
+    </div>
+</div>
+
+<div id="content">
+    <h1>SkertJS REPL</h1>
+    <p>
+        This is a REPL (Read-Eval-Print-Loop) which uses SkertJS to compile and execute code in your browser.
+    </p>
+
+    <h2>Global Variables</h2>
+
+    <p>The following global variables are defined for convenience:</p>
+
+    <table>
+    <tr>
+        <td><code>contentElement</code></td>
+        <td>The <strong>div</strong> element which contains the content you're reading.
+            You can use this element to modify the DOM.
+        </td>
+    </tr>
+    </table>
+
+    <h2>REPL Commands</h2>
+
+    <p>The following REPL commands are supported:</p>
+
+    <table>
+    <tr>
+        <td><code>.clear</code></td>
+        <td>Clears the terminal output.</td>
+    </tr>
+    <tr>
+        <td><code>.load</code></td>
+        <td>Loads a script from a URL.</td>
+    </tr>
+    <tr>
+        <td><code>.translate</code></td>
+        <td>Translates script code.</td>
+    </tr>
+    <tr>
+        <td><code>.translateModule</code></td>
+        <td>Translates module code.</td>
+    </tr>
+    </table>
+
+</div>
+
+</body>
+</html>
