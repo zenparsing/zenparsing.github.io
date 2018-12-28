@@ -37,7 +37,7 @@ const escapeHTML = (function() {
 function replEval() {
   // Hackily convert lexical declarations into var declarations so that
   // they are hoisted to the global scope
-  return window.eval(arguments[0].replace(/(^|\n)\s*(const|let)\s/g, '\n'));
+  return window.eval(arguments[0].replace(/(^|\n)\s*(const|let)\s/g, '\n var '));
 }
 
 const MAX_CONSOLE_LINES = 100;
@@ -179,6 +179,10 @@ function replRun() {
     let output = '';
     let result;
     let error;
+
+    if (code.trim() === '?') {
+      code = '.help';
+    }
 
     if (code.charAt(0) === '.') {
       executed = true;

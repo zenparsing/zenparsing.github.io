@@ -5551,7 +5551,7 @@
 	});
 
 	function registerTransform$3({ define, context, templates, AST }) {
-	  define((rootPath) => rootPath.visit(new class MethodExtractionTransform {
+	  define((rootPath) => rootPath.visit(new class MethodExtractionVisitor {
 	    constructor() {
 	      this.helperName = context.get('methodExtractionHelper') || '';
 	    }
@@ -5601,7 +5601,7 @@
 	        member = member.expression;
 	      }
 	      let helper = this.insertHelper();
-	      if (member.object.type === 'Identifier') {
+	      if (member.object.type === 'Identifier' || member.object.type === 'ThisExpression') {
 	        path.replaceNode(templates.expression`
           ${helper}(${member.object}, ${member})
         `);
@@ -5629,8 +5629,19 @@
 	    CallWithExpression(path) {
 	      path.visitChildren(this);
 	      let { node } = path;
-	      node.arguments.unshift(node.subject);
-	      path.replaceNode(new AST.CallExpression(node.callee, node.arguments, node.trailingComma));
+	      let call = new AST.CallExpression(node.callee, node.arguments);
+	      if (node.subject.type === 'Identifier' || node.subject.type === 'ThisExpression') {
+	        node.arguments.unshift(node.subject);
+	        path.replaceNode(call);
+	      } else {
+	        let temp = path.uniqueIdentifier('_tmp', {
+	          kind: 'let'
+	        });
+	        node.arguments.unshift(new AST.Identifier(temp));
+	        path.replaceNode(templates.expression`
+          (${temp} = ${node.subject}, ${call})
+        `);
+	      }
 	    }
 	  }));
 	}
@@ -5640,7 +5651,7 @@
 	});
 
 	function registerTransform$5({ define, templates, AST }) {
-	  define((rootPath) => rootPath.visit(new class NullOrTransform {
+	  define((rootPath) => rootPath.visit(new class NullCoalescingVisitor {
 	    BinaryExpression(path) {
 	      path.visitChildren(true);
 	      let { node } = path;
@@ -5649,7 +5660,7 @@
 	      }
 	      if (node.left.type === 'Identifier') {
 	        path.replaceNode(templates.expression`
-          (${node.left} == null ? ${node.left} : ${node.right})
+          (${node.left} != null ? ${node.left} : ${node.right})
         `);
 	      } else {
 	        let temp = path.uniqueIdentifier('_temp', {
@@ -5658,7 +5669,7 @@
 	        path.replaceNode(templates.expression`
           (
             ${temp} = ${node.left},
-            ${temp} == null ? ${temp} : ${node.right}
+            ${temp} != null ? ${temp} : ${node.right}
           )
         `);
 	      }
@@ -5666,7 +5677,7 @@
 	  }));
 	}
 
-	var NullOrTransform = Object.freeze({
+	var NullCoalescingTransform = Object.freeze({
 	  registerTransform: registerTransform$5
 	});
 
@@ -5677,7 +5688,7 @@
 	});
 
 	function getTransforms(options = {}) {
-	  let list = [AsyncBlockTransform, SymbolNameTransform, MethodExtractionTransform, CallWithTransform, NullOrTransform, AnnotationTransform];
+	  let list = [AsyncBlockTransform, SymbolNameTransform, MethodExtractionTransform, CallWithTransform, NullCoalescingTransform, AnnotationTransform];
 	  if (options.transformModules) {
 	    list.push(ModuleTransform);
 	  }
@@ -6149,7 +6160,7 @@
 	})();
 
 	function replEval() {
-	  return window.eval(arguments[0].replace(/(^|\n)\s*(const|let)\s/g, '\n'));
+	  return window.eval(arguments[0].replace(/(^|\n)\s*(const|let)\s/g, '\n var '));
 	}
 
 	const MAX_CONSOLE_LINES = 100;
@@ -6289,6 +6300,9 @@
 	    let output = '';
 	    let result;
 	    let error;
+	    if (code.trim() === '?') {
+	      code = '.help';
+	    }
 	    if (code.charAt(0) === '.') {
 	      executed = true;
 	      let cmd = code.slice(1).replace(/\s[\s\S]*/g, '');
