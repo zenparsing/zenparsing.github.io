@@ -5220,6 +5220,7 @@
 	      this.replacements = null;
 	      this.index = 0;
 	      this.topImport = null;
+	      this.metaName = null;
 	    }
 
 	    execute(rootPath) {
@@ -5260,12 +5261,13 @@
 	    Module(node) {
 	      let moduleScope = Parser_1.resolveScopes(node).children[0];
 	      let replaceMap = new Map();
+	      let { rootPath } = this;
 	      this.replacements = Array.from(node.statements);
 	      for (let i = 0; i < node.statements.length; ++i) {
 	        this.index = i;
 	        this.visit(node.statements[i]);
 	      }
-	      let statements = [new AST.Directive('use strict', new AST.StringLiteral('use strict'))];
+	      let statements = [];
 	      for (let { local, exported, hoist } of this.exports) {
 	        if (hoist) {
 	          statements.push(templates.statement`
@@ -5293,7 +5295,7 @@
 	        }
 	        let moduleName = this.moduleNames.get(from.value);
 	        if (!moduleName) {
-	          moduleName = this.rootPath.uniqueIdentifier('_' + from.value.replace(/.*[\/\\](?=[^\/\\]+$)/, '').replace(/\..*$/, '').replace(/[^a-zA-Z0-1_$]/g, '_'));
+	          moduleName = rootPath.uniqueIdentifier('_' + from.value.replace(/.*[\/\\](?=[^\/\\]+$)/, '').replace(/\..*$/, '').replace(/[^a-zA-Z0-1_$]/g, '_'));
 	          this.moduleNames.set(from.value, moduleName);
 	          statements.push(templates.statement`
             let ${moduleName} = require(${from})
@@ -5346,7 +5348,7 @@
 	        }
 	      }
 	      node.statements = statements;
-	      this.rootPath.visit({
+	      rootPath.visit({
 	        Identifier(path) {
 	          let expr = replaceMap.get(path.node);
 	          if (!expr) {
@@ -5375,11 +5377,33 @@
 	          }
 	        },
 	        ImportCall(path) {
+	          path.visitChildren(this);
 	          path.replaceNode(templates.expression`
             Promise.resolve(require(${path.node.argument}))
           `);
+	        },
+	        MetaProperty(path) {
+	          path.visitChildren(this);
+	          if (path.node.left !== 'import' || path.node.right !== 'meta') {
+	            return;
+	          }
+	          if (!this.metaName) {
+	            this.metaName = rootPath.uniqueIdentifier('importMeta', {
+	              kind: 'const',
+	              initializer: templates.expression`
+                ({
+                  require,
+                  dirname: __dirname,
+                  filename: __filename,
+                })
+              `.expression
+	            });
+	          }
+	          path.replaceNode(new AST.Identifier(this.metaName));
 	        }
 	      });
+	      rootPath.applyChanges();
+	      node.statements.unshift(new AST.Directive('use strict', new AST.StringLiteral('use strict')));
 	    }
 
 	    ImportDeclaration(node) {
