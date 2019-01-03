@@ -35,9 +35,22 @@ const escapeHTML = (function() {
 })();
 
 function replEval() {
-  // Hackily convert lexical declarations into var declarations so that
-  // they are hoisted to the global scope
-  return window.eval(arguments[0].replace(/(^|\n)\s*(const|let)\s/g, '\n var '));
+  self.__replValue__ = undefined;
+
+  let s = document.createElement('script');
+  s.innerText = arguments[0].replace(/(^|\n)\s*let\s/g, '\n var ');
+
+  let error = undefined;
+  window.onerror = function(message, source, lineno, colno, err) { error = err };
+  elem('head').appendChild(s);
+  window.onerror = undefined;
+  elem('head').removeChild(s);
+
+  if (error) {
+    throw error;
+  }
+
+  return self.__replValue__;
 }
 
 const MAX_CONSOLE_LINES = 100;
@@ -167,6 +180,10 @@ function formatError(error) {
   });
 }
 
+function isExpression(code) {
+  return !/^\s*(function|class|var|let|const|if|do|while|for|switch|with)[^a-zA-Z0-9]/.test(code);
+}
+
 function replRun() {
   let code = input.value;
 
@@ -198,6 +215,9 @@ function replRun() {
     if (!executed) {
       executed = true;
       try {
+        if (isExpression(code)) {
+          code = `self.__replValue__ = ${ code }`;
+        }
         code = compile(code, { context: compilerContext }).output;
         result = await replEval(code);
       } catch (x) {
