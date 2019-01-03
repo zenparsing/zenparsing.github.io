@@ -238,13 +238,6 @@
 	  this.template = template;
 	}
 
-	function AsyncBlock(statements) {
-	  this.type = 'AsyncBlock';
-	  this.start = -1;
-	  this.end = -1;
-	  this.statements = statements;
-	}
-
 	function NewExpression(callee, args, trailingComma) {
 	  this.type = 'NewExpression';
 	  this.start = -1;
@@ -755,7 +748,6 @@
 	  CallWithExpression: CallWithExpression,
 	  TemplateExpression: TemplateExpression,
 	  TaggedTemplateExpression: TaggedTemplateExpression,
-	  AsyncBlock: AsyncBlock,
 	  NewExpression: NewExpression,
 	  ParenExpression: ParenExpression,
 	  ObjectLiteral: ObjectLiteral,
@@ -2160,7 +2152,7 @@
 	  peekAwait() {
 	    if (this.peekKeyword('await')) {
 	      if (this.context.functionBody && this.context.isAsync) return true;
-	      if (this.isModule) this.fail('Await is reserved within modules');
+	      if (this.isModule) return true;
 	    }
 	    return false;
 	  }
@@ -2851,19 +2843,6 @@
 	    return this.node(new TemplateExpression(parts), start);
 	  }
 
-	  AsyncBlock() {
-	    let start = this.nodeStart();
-	    this.read();
-	    this.pushContext();
-	    this.context.isAsync = true;
-	    this.context.functionBody = true;
-	    this.read('{');
-	    let statements = this.StatementList(true);
-	    this.read('}');
-	    this.popContext();
-	    return this.node(new AsyncBlock(statements), start);
-	  }
-
 	  Statement(label) {
 	    switch (this.peek()) {
 	      case 'IDENTIFIER':
@@ -3282,11 +3261,8 @@
 	        return this.LexicalDeclaration();
 	      case 'IDENTIFIER':
 	        if (this.peekLet()) return this.LexicalDeclaration();
-	        switch (this.peekAsync()) {
-	          case 'function':
-	            return this.FunctionDeclaration();
-	          case '{':
-	            return this.AsyncBlock();
+	        if (this.peekAsync() === 'function') {
+	          return this.FunctionDeclaration();
 	        }
 	        break;
 	    }
@@ -5160,21 +5136,7 @@
 	  return result;
 	}
 
-	function registerTransform({ define, templates, AST }) {
-	  define((rootPath) => rootPath.visit(new class AsyncBlockVisitor {
-	    AsyncBlock(path) {
-	      path.visitChildren(this);
-	      let arrow = new AST.ArrowFunction('async', [], new AST.FunctionBody(path.node.statements));
-	      path.replaceNode(new AST.ExpressionStatement(new AST.CallExpression(new AST.ParenExpression(arrow), [])));
-	    }
-	  }));
-	}
-
-	var AsyncBlockTransform = Object.freeze({
-	  registerTransform: registerTransform
-	});
-
-	function registerTransform$1({ define, context, templates, AST }) {
+	function registerTransform({ define, context, templates, AST }) {
 	  define((rootPath) => rootPath.visit(new class SymbolNameVisitor {
 	    constructor() {
 	      let names = context.get('symbolNames');
@@ -5204,10 +5166,10 @@
 	}
 
 	var SymbolNameTransform = Object.freeze({
-	  registerTransform: registerTransform$1
+	  registerTransform: registerTransform
 	});
 
-	function registerTransform$2({ define, templates, AST }) {
+	function registerTransform$1({ define, templates, AST }) {
 	  define((rootPath) => new ImportExportProcessor().execute(rootPath));
 
 	  class ImportExportProcessor {
@@ -5256,6 +5218,28 @@
 	          node.elements.forEach((p) => this.getPatternDeclarations(p.pattern, list));
 	          break;
 	      }
+	    }
+
+	    hasTopLevelAwait() {
+	      let topLevelFound = {};
+	      try {
+	        this.rootPath.visit({
+	          FunctionBody() {},
+	          ArrowFunction() {},
+	          UnaryExpression(path) {
+	            if (path.node.operator === 'await') {
+	              throw topLevelFound;
+	            }
+	            path.visitChildren(this);
+	          }
+	        });
+	      } catch (err) {
+	        if (err === topLevelFound) {
+	          return true;
+	        }
+	        throw err;
+	      }
+	      return false;
 	    }
 
 	    Module(node) {
@@ -5403,6 +5387,15 @@
 	        }
 	      });
 	      rootPath.applyChanges();
+	      if (this.hasTopLevelAwait()) {
+	        if (this.exports.length > 0) {
+	          throw new Error('Module with top-level await cannot have exports');
+	        }
+	        let fn = new AST.FunctionExpression('async', null, [], new AST.FunctionBody(node.statements));
+	        node.statements = templates.statementList`
+          (${fn})().catch(err => setTimeout(() => { throw err; }, 0));
+        `;
+	      }
 	      node.statements.unshift(new AST.Directive('use strict', new AST.StringLiteral('use strict')));
 	    }
 
@@ -5571,10 +5564,10 @@
 	}
 
 	var ModuleTransform = Object.freeze({
-	  registerTransform: registerTransform$2
+	  registerTransform: registerTransform$1
 	});
 
-	function registerTransform$3({ define, context, templates, AST }) {
+	function registerTransform$2({ define, context, templates, AST }) {
 	  define((rootPath) => rootPath.visit(new class MethodExtractionVisitor {
 	    constructor() {
 	      this.helperName = context.get('methodExtractionHelper') || '';
@@ -5645,10 +5638,10 @@
 	}
 
 	var MethodExtractionTransform = Object.freeze({
-	  registerTransform: registerTransform$3
+	  registerTransform: registerTransform$2
 	});
 
-	function registerTransform$4({ define, templates, AST }) {
+	function registerTransform$3({ define, templates, AST }) {
 	  define((rootPath) => rootPath.visit(new class CallWithVisitor {
 	    CallWithExpression(path) {
 	      path.visitChildren(this);
@@ -5671,10 +5664,10 @@
 	}
 
 	var CallWithTransform = Object.freeze({
-	  registerTransform: registerTransform$4
+	  registerTransform: registerTransform$3
 	});
 
-	function registerTransform$5({ define, templates, AST }) {
+	function registerTransform$4({ define, templates, AST }) {
 	  define((rootPath) => rootPath.visit(new class NullCoalescingVisitor {
 	    BinaryExpression(path) {
 	      path.visitChildren(true);
@@ -5702,17 +5695,17 @@
 	}
 
 	var NullCoalescingTransform = Object.freeze({
+	  registerTransform: registerTransform$4
+	});
+
+	function registerTransform$5() {}
+
+	var AnnotationTransform = Object.freeze({
 	  registerTransform: registerTransform$5
 	});
 
-	function registerTransform$6() {}
-
-	var AnnotationTransform = Object.freeze({
-	  registerTransform: registerTransform$6
-	});
-
 	function getTransforms(options = {}) {
-	  let list = [AsyncBlockTransform, SymbolNameTransform, MethodExtractionTransform, CallWithTransform, NullCoalescingTransform, AnnotationTransform];
+	  let list = [SymbolNameTransform, MethodExtractionTransform, CallWithTransform, NullCoalescingTransform, AnnotationTransform];
 	  if (options.transformModules) {
 	    list.push(ModuleTransform);
 	  }
@@ -6319,7 +6312,7 @@
 	  if (bufferedInput) {
 	    code = bufferedInput + '\n' + code;
 	  }
-	  advanceInput(() => {
+	  advanceInput(async () => {
 	    let executed = false;
 	    let output = '';
 	    let result;
@@ -6346,7 +6339,7 @@
 	        code = compile(code, {
 	          context: compilerContext
 	        }).output;
-	        result = replEval(code);
+	        result = await replEval(code);
 	      } catch (x) {
 	        error = x || {};
 	      }
@@ -6372,12 +6365,12 @@
 	  return indent;
 	}
 
-	function advanceInput(fn) {
+	async function advanceInput(fn) {
 	  let value = input.value;
 	  history.add(value);
 	  addLine(escapeHTML(value), prompt.className);
 	  setInputValue('');
-	  let output = fn && fn() || '';
+	  let output = fn && await fn() || '';
 	  if (output) {
 	    addLine(output);
 	  }

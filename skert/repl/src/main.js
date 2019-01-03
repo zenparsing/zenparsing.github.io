@@ -174,7 +174,7 @@ function replRun() {
     code = bufferedInput + '\n' + code;
   }
 
-  advanceInput(() => {
+  advanceInput(async () => {
     let executed = false;
     let output = '';
     let result;
@@ -199,7 +199,7 @@ function replRun() {
       executed = true;
       try {
         code = compile(code, { context: compilerContext }).output;
-        result = replEval(code);
+        result = await replEval(code);
       } catch (x) {
         error = x || {};
       }
@@ -230,7 +230,7 @@ function autoIndent(last) {
   return indent;
 }
 
-function advanceInput(fn) {
+async function advanceInput(fn) {
   let value = input.value;
 
   history.add(value);
@@ -238,7 +238,7 @@ function advanceInput(fn) {
   addLine(escapeHTML(value), prompt.className);
   setInputValue('');
 
-  let output = fn && fn() || '';
+  let output = fn && await fn() || '';
 
   if (output) {
     addLine(output);
