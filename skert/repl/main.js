@@ -28,10 +28,16 @@
 	    let value = node[key];
 	    if (Array.isArray(value)) {
 	      for (let j = 0; j < value.length; ++j) {
-	        if (isNode(value[j])) if (fn(value[j], key, j, stop) === stop) return;
+	        if (isNode(value[j])) {
+	          if (fn(value[j], key, j, stop) === stop) {
+	            return;
+	          }
+	        }
 	      }
 	    } else if (isNode(value)) {
-	      if (fn(value, key, null, stop) === stop) return;
+	      if (fn(value, key, null, stop) === stop) {
+	        return;
+	      }
 	    }
 	  }
 	}
@@ -236,13 +242,6 @@
 	  this.end = -1;
 	  this.tag = tag;
 	  this.template = template;
-	}
-
-	function AsyncBlock(statements) {
-	  this.type = 'AsyncBlock';
-	  this.start = -1;
-	  this.end = -1;
-	  this.statements = statements;
 	}
 
 	function NewExpression(callee, args, trailingComma) {
@@ -582,21 +581,23 @@
 	  this.body = body;
 	}
 
-	function ClassDeclaration(identifier, base, body) {
+	function ClassDeclaration(identifier, base, mixins, body) {
 	  this.type = 'ClassDeclaration';
 	  this.start = -1;
 	  this.end = -1;
 	  this.identifier = identifier;
 	  this.base = base;
+	  this.mixins = mixins;
 	  this.body = body;
 	}
 
-	function ClassExpression(identifier, base, body) {
+	function ClassExpression(identifier, base, mixins, body) {
 	  this.type = 'ClassExpression';
 	  this.start = -1;
 	  this.end = -1;
 	  this.identifier = identifier;
 	  this.base = base;
+	  this.mixins = mixins;
 	  this.body = body;
 	}
 
@@ -755,7 +756,6 @@
 	  CallWithExpression: CallWithExpression,
 	  TemplateExpression: TemplateExpression,
 	  TaggedTemplateExpression: TaggedTemplateExpression,
-	  AsyncBlock: AsyncBlock,
 	  NewExpression: NewExpression,
 	  ParenExpression: ParenExpression,
 	  ObjectLiteral: ObjectLiteral,
@@ -862,14 +862,20 @@
 	  let a = str.charCodeAt(offset);
 	  if (a >= 55296 && a <= 56319 && str.length > offset + 1) {
 	    let b = str.charCodeAt(offset + 1);
-	    if (b >= 56320 && b <= 57343) return (a - 55296) * 1024 + b - 56320 + 65536;
+	    if (b >= 56320 && b <= 57343) {
+	      return (a - 55296) * 1024 + b - 56320 + 65536;
+	    }
 	  }
 	  return a;
 	}
 
 	function codePointString(code) {
-	  if (code > 1114111) return '';
-	  if (code <= 65535) return String.fromCharCode(code);
+	  if (code > 1114111) {
+	    return '';
+	  }
+	  if (code <= 65535) {
+	    return String.fromCharCode(code);
+	  }
 	  code -= 65536;
 	  return String.fromCharCode((code >> 10) + 55296, (code % 1024) + 56320);
 	}
@@ -880,9 +886,14 @@
 	  while (left <= right) {
 	    let mid = (left + right) >> 1;
 	    let test = array[mid];
-	    if (val === test) return mid;
-	    if (val < test) right = mid - 1;
-	    else left = mid + 1;
+	    if (val === test) {
+	      return mid;
+	    }
+	    if (val < test) {
+	      right = mid - 1;
+	    } else {
+	      left = mid + 1;
+	    }
 	  }
 	  return right;
 	}
@@ -894,7 +905,9 @@
 	  }
 
 	  addBreak(offset) {
-	    if (offset > this.lastLineBreak) this.lines.push(this.lastLineBreak = offset);
+	    if (offset > this.lastLineBreak) {
+	      this.lines.push(this.lastLineBreak = offset);
+	    }
 	  }
 
 	  locate(offset) {
@@ -1007,7 +1020,9 @@
 	  }
 
 	  next(context) {
-	    if (this.type !== 'COMMENT') this.newlineBefore = false;
+	    if (this.type !== 'COMMENT') {
+	      this.newlineBefore = false;
+	    }
 	    this.strictError = '';
 	    do {
 	      this.start = this.offset;
@@ -1051,10 +1066,14 @@
 	    if (this.peekChar() === '{') {
 	      this.offset++;
 	      hex = this.readHex(0);
-	      if (hex.length < 1 || this.readChar() !== '}') return null;
+	      if (hex.length < 1 || this.readChar() !== '}') {
+	        return null;
+	      }
 	    } else {
 	      hex = this.readHex(4);
-	      if (hex.length < 4) return null;
+	      if (hex.length < 4) {
+	        return null;
+	      }
 	    }
 	    return parseInt(hex, 16);
 	  }
@@ -1067,12 +1086,18 @@
 
 	  readIdentifierEscape(startChar) {
 	    this.offset++;
-	    if (this.readChar() !== 'u') return null;
+	    if (this.readChar() !== 'u') {
+	      return null;
+	    }
 	    let cp = this.readUnicodeEscapeValue();
 	    if (startChar) {
-	      if (!isIdentifierStart(cp)) return null;
+	      if (!isIdentifierStart(cp)) {
+	        return null;
+	      }
 	    } else {
-	      if (!isIdentifierPart(cp)) return null;
+	      if (!isIdentifierPart(cp)) {
+	        return null;
+	      }
 	    }
 	    return codePointString(cp);
 	  }
@@ -1102,7 +1127,9 @@
 	      case 'n':
 	        return '\n';
 	      case '\r':
-	        if (this.peekChar() === '\n') this.offset++;
+	        if (this.peekChar() === '\n') {
+	          this.offset++;
+	        }
 	        this.lineMap.addBreak(this.offset);
 	        return continuationChar;
 	      case '\n':
@@ -1140,8 +1167,9 @@
 	    let start = this.offset;
 	    let code = 0;
 	    while (code = this.peekCode()) {
-	      if (code >= low && code <= high) this.offset++;
-	      else break;
+	      if (code >= low && code <= high) {
+	        this.offset++;
+	      } else break;
 	    }
 	    return this.input.slice(start, this.offset);
 	  }
@@ -1150,8 +1178,9 @@
 	    let start = this.offset;
 	    let code = 0;
 	    while (code = this.peekCode()) {
-	      if (code >= 48 && code <= 57) this.offset++;
-	      else break;
+	      if (code >= 48 && code <= 57) {
+	        this.offset++;
+	      } else break;
 	    }
 	    return this.input.slice(start, this.offset);
 	  }
@@ -1170,17 +1199,23 @@
 	    let str = '';
 	    let chr = '';
 	    while (chr = this.peekChar()) {
-	      if (!hexChar.test(chr)) break;
+	      if (!hexChar.test(chr)) {
+	        break;
+	      }
 	      str += chr;
 	      this.offset++;
-	      if (str.length === maxLen) break;
+	      if (str.length === maxLen) {
+	        break;
+	      }
 	    }
 	    return str;
 	  }
 
 	  peekNumberFollow() {
 	    let c = this.peekCode();
-	    if (c > 127) return !isIdentifierStart(this.peekCodePoint());
+	    if (c > 127) {
+	      return !isIdentifierStart(this.peekCodePoint());
+	    }
 	    return !(c > 64 && c < 91 || c > 96 && c < 123 || c > 47 && c < 58 || c === 36 || c === 95 || c === 92);
 	  }
 
@@ -1195,14 +1230,21 @@
 	        case 'slash':
 	          {
 	            let next = this.peekCodeAt(1);
-	            if (next === 47) return this.LineComment();
-	            else if (next === 42) return this.BlockComment();
+	            if (next === 47) {
+	              return this.LineComment();
+	            } else if (next === 42) {
+	              return this.BlockComment();
+	            }
 	          }
 	      }
 	    } else {
-	      if (isNewlineChar(this.peekChar())) return this.Newline(code);
+	      if (isNewlineChar(this.peekChar())) {
+	        return this.Newline(code);
+	      }
 	      let cp = this.peekCodePoint();
-	      if (isWhitespace(cp)) return this.UnicodeWhitespace(cp);
+	      if (isWhitespace(cp)) {
+	        return this.UnicodeWhitespace(cp);
+	      }
 	    }
 	    return 'UNKNOWN';
 	  }
@@ -1218,8 +1260,7 @@
 	      case 'identifier':
 	        return this.Identifier(context, code);
 	      case 'rbrace':
-	        if (context === 'template') return this.Template();
-	        else return this.PunctuatorChar();
+	        return context === 'template' ? this.Template() : this.PunctuatorChar();
 	      case 'punctuator':
 	        return this.Punctuator();
 	      case 'newline':
@@ -1245,21 +1286,35 @@
 	        return next >= 48 && next <= 55 ? this.LegacyOctalNumber() : this.Number();
 	      case 'dot':
 	        next = this.peekCodeAt(1);
-	        if (next >= 48 && next <= 57) return this.Number();
-	        else return this.Punctuator();
+	        if (next >= 48 && next <= 57) {
+	          return this.Number();
+	        } else {
+	          return this.Punctuator();
+	        }
 	      case 'slash':
 	        next = this.peekCodeAt(1);
-	        if (next === 47) return this.LineComment();
-	        else if (next === 42) return this.BlockComment();
-	        else if (context === 'div') return this.Punctuator();
-	        else return this.RegularExpression();
+	        if (next === 47) {
+	          return this.LineComment();
+	        } else if (next === 42) {
+	          return this.BlockComment();
+	        } else if (context === 'div') {
+	          return this.Punctuator();
+	        } else {
+	          return this.RegularExpression();
+	        }
 	      case 'symbol':
 	        return this.Symbol();
 	    }
-	    if (isNewlineChar(this.peekChar())) return this.Newline(code);
+	    if (isNewlineChar(this.peekChar())) {
+	      return this.Newline(code);
+	    }
 	    let cp = this.peekCodePoint();
-	    if (isWhitespace(cp)) return this.UnicodeWhitespace(cp);
-	    if (isIdentifierStart(cp)) return this.Identifier(context, cp);
+	    if (isWhitespace(cp)) {
+	      return this.UnicodeWhitespace(cp);
+	    }
+	    if (isIdentifierStart(cp)) {
+	      return this.Identifier(context, cp);
+	    }
 	    return this.Error();
 	  }
 
@@ -1267,21 +1322,28 @@
 	    this.offset++;
 	    let code = 0;
 	    while (code = this.peekCode()) {
-	      if (code === 9 || code === 11 || code === 12 || code === 32) this.offset++;
-	      else break;
+	      if (code === 9 || code === 11 || code === 12 || code === 32) {
+	        this.offset++;
+	      } else {
+	        break;
+	      }
 	    }
 	    return '';
 	  }
 
 	  UnicodeWhitespace(cp) {
 	    this.offset += codePointLength(cp);
-	    while (isWhitespace(cp = this.peekCodePoint())) this.offset += codePointLength(cp);
+	    while (isWhitespace(cp = this.peekCodePoint())) {
+	      this.offset += codePointLength(cp);
+	    }
 	    return '';
 	  }
 
 	  Newline(code) {
 	    this.offset++;
-	    if (code === 13 && this.peekCode() === 10) this.offset++;
+	    if (code === 13 && this.peekCode() === 10) {
+	      this.offset++;
+	    }
 	    this.lineMap.addBreak(this.offset);
 	    this.newlineBefore = true;
 	    return '';
@@ -1323,14 +1385,18 @@
 	      }
 	      if (chr === '\\') {
 	        esc = this.readStringEscape('\n');
-	        if (esc === null) return this.Error();
+	        if (esc === null) {
+	          return this.Error();
+	        }
 	        val += esc;
 	      } else {
 	        val += chr;
 	        this.offset++;
 	      }
 	    }
-	    if (!chr) return this.Error();
+	    if (!chr) {
+	      return this.Error();
+	    }
 	    this.offset++;
 	    this.value = val;
 	    this.templateEnd = end;
@@ -1343,18 +1409,26 @@
 	    let esc = '';
 	    let chr = '';
 	    while (chr = this.input[this.offset]) {
-	      if (chr === delim) break;
-	      if (isNewlineChar(chr, true)) return this.Error();
+	      if (chr === delim) {
+	        break;
+	      }
+	      if (isNewlineChar(chr, true)) {
+	        return this.Error();
+	      }
 	      if (chr === '\\') {
 	        esc = this.readStringEscape('');
-	        if (esc === null) return this.Error();
+	        if (esc === null) {
+	          return this.Error();
+	        }
 	        val += esc;
 	      } else {
 	        val += chr;
 	        this.offset++;
 	      }
 	    }
-	    if (!chr) return this.Error();
+	    if (!chr) {
+	      return this.Error();
+	    }
 	    this.offset++;
 	    this.value = val;
 	    return 'STRING';
@@ -1369,7 +1443,9 @@
 	    let code = 0;
 	    let flagStart = 0;
 	    while (chr = this.readChar()) {
-	      if (isNewlineChar(chr)) return this.Error();
+	      if (isNewlineChar(chr)) {
+	        return this.Error();
+	      }
 	      if (backslash) {
 	        val += '\\' + chr;
 	        backslash = false;
@@ -1387,15 +1463,20 @@
 	        val += chr;
 	      }
 	    }
-	    if (!chr) return this.Error();
+	    if (!chr) {
+	      return this.Error();
+	    }
 	    flagStart = this.offset;
 	    while (true) {
 	      code = this.peekCode();
 	      if (code === 92) {
 	        return this.Error();
 	      } else if (code > 127) {
-	        if (isIdentifierPart(code = this.peekCodePoint())) this.offset += codePointLength(code);
-	        else break;
+	        if (isIdentifierPart(code = this.peekCodePoint())) {
+	          this.offset += codePointLength(code);
+	        } else {
+	          break;
+	        }
 	      } else if (isIdentifierPartAscii(code)) {
 	        this.offset++;
 	      } else {
@@ -1412,12 +1493,17 @@
 	    let start = this.offset;
 	    let code = 0;
 	    while (code = this.peekCode()) {
-	      if (code >= 48 && code <= 55) this.offset++;
-	      else break;
+	      if (code >= 48 && code <= 55) {
+	        this.offset++;
+	      } else {
+	        break;
+	      }
 	    }
 	    this.strictError = 'Octal literals are not allowed in strict mode';
 	    let val = parseInt(this.input.slice(start, this.offset), 8);
-	    if (!this.peekNumberFollow()) return this.Error();
+	    if (!this.peekNumberFollow()) {
+	      return this.Error();
+	    }
 	    this.number = val;
 	    return 'NUMBER';
 	  }
@@ -1438,12 +1524,18 @@
 	      if (next === 'e' || next === 'E') {
 	        this.offset++;
 	        next = this.peekChar();
-	        if (next === '+' || next === '-') this.offset++;
-	        if (!this.readInteger()) return this.Error();
+	        if (next === '+' || next === '-') {
+	          this.offset++;
+	        }
+	        if (!this.readInteger()) {
+	          return this.Error();
+	        }
 	      }
 	      val = parseFloat(this.input.slice(start, this.offset));
 	    }
-	    if (!this.peekNumberFollow()) return this.Error();
+	    if (!this.peekNumberFollow()) {
+	      return this.Error();
+	    }
 	    this.number = val;
 	    return 'NUMBER';
 	  }
@@ -1452,7 +1544,9 @@
 	    this.offset += 2;
 	    let val = parseInt(this.readRange(48, 49), 2);
 	    this.readIntegerSuffix();
-	    if (!this.peekNumberFollow()) return this.Error();
+	    if (!this.peekNumberFollow()) {
+	      return this.Error();
+	    }
 	    this.number = val;
 	    return 'NUMBER';
 	  }
@@ -1461,7 +1555,9 @@
 	    this.offset += 2;
 	    let val = parseInt(this.readRange(48, 55), 8);
 	    this.readIntegerSuffix();
-	    if (!this.peekNumberFollow()) return this.Error();
+	    if (!this.peekNumberFollow()) {
+	      return this.Error();
+	    }
 	    this.number = val;
 	    return 'NUMBER';
 	  }
@@ -1470,7 +1566,9 @@
 	    this.offset += 2;
 	    let val = parseInt(this.readHex(0), 16);
 	    this.readIntegerSuffix();
-	    if (!this.peekNumberFollow()) return this.Error();
+	    if (!this.peekNumberFollow()) {
+	      return this.Error();
+	    }
 	    this.number = val;
 	    return 'NUMBER';
 	  }
@@ -1481,7 +1579,9 @@
 	    let esc = '';
 	    if (code === 92) {
 	      esc = this.readIdentifierEscape(true);
-	      if (esc === null) return this.Error();
+	      if (esc === null) {
+	        return this.Error();
+	      }
 	      val = esc;
 	      start = this.offset;
 	    } else if (code > 127) {
@@ -1494,12 +1594,17 @@
 	      if (code === 92) {
 	        val += this.input.slice(start, this.offset);
 	        esc = this.readIdentifierEscape(false);
-	        if (esc === null) return this.Error();
+	        if (esc === null) {
+	          return this.Error();
+	        }
 	        val += esc;
 	        start = this.offset;
 	      } else if (code > 127) {
-	        if (isIdentifierPart(code = this.peekCodePoint())) this.offset += codePointLength(code);
-	        else break;
+	        if (isIdentifierPart(code = this.peekCodePoint())) {
+	          this.offset += codePointLength(code);
+	        } else {
+	          break;
+	        }
 	      } else if (isIdentifierPartAscii(code)) {
 	        this.offset++;
 	      } else {
@@ -1508,7 +1613,9 @@
 	    }
 	    val += this.input.slice(start, this.offset);
 	    this.value = val;
-	    if (context !== 'name' && isReservedWord(val)) return esc ? this.Error() : val;
+	    if (context !== 'name' && isReservedWord(val)) {
+	      return esc ? this.Error() : val;
+	    }
 	    return 'IDENTIFIER';
 	  }
 
@@ -1522,7 +1629,9 @@
 	    let start = this.offset;
 	    let chr = '';
 	    while (chr = this.peekChar()) {
-	      if (isNewlineChar(chr)) break;
+	      if (isNewlineChar(chr)) {
+	        break;
+	      }
 	      this.offset++;
 	    }
 	    this.value = this.input.slice(start, this.offset);
@@ -1536,9 +1645,13 @@
 	    while (true) {
 	      pattern.lastIndex = this.offset;
 	      let m = pattern.exec(this.input);
-	      if (!m) return this.Error();
+	      if (!m) {
+	        return this.Error();
+	      }
 	      this.offset = m.index + m[0].length;
-	      if (m[0] === '*/') break;
+	      if (m[0] === '*/') {
+	        break;
+	      }
 	      this.newlineBefore = true;
 	      this.lineMap.addBreak(m.index);
 	    }
@@ -1551,14 +1664,18 @@
 	  }
 
 	  Error() {
-	    if (this.start === this.offset) this.offset++;
+	    if (this.start === this.offset) {
+	      this.offset++;
+	    }
 	    return 'ILLEGAL';
 	  }
 	}
 
 	class Transform {
 	  transformFormals(expr) {
-	    if (!expr) return [];
+	    if (!expr) {
+	      return [];
+	    }
 	    let trailingComma = false;
 	    let list;
 	    switch (expr.type) {
@@ -1582,8 +1699,12 @@
 	      let param;
 	      if (i === list.length - 1 && node.type === 'SpreadExpression') {
 	        expr = node.expression;
-	        if (trailingComma) this.fail('Trailing comma not allowed after rest parameter', expr);
-	        if (expr.type !== 'Identifier') this.fail('Invalid rest parameter', expr);
+	        if (trailingComma) {
+	          this.fail('Trailing comma not allowed after rest parameter', expr);
+	        }
+	        if (expr.type !== 'Identifier') {
+	          this.fail('Invalid rest parameter', expr);
+	        }
 	        this.checkBindingTarget(expr);
 	        node.error = '';
 	        param = this.node(new RestParameter(expr), node.start, node.end);
@@ -1601,10 +1722,14 @@
 	    let elems = node.elements;
 	    for (let i = 0; i < elems.length; ++i) {
 	      let elem = elems[i];
-	      if (!elem) continue;
+	      if (!elem) {
+	        continue;
+	      }
 	      switch (elem.type) {
 	        case 'SpreadExpression':
-	          if (i < elems.length - 1 || node.trailingComma) this.fail('Invalid destructuring pattern', elem);
+	          if (i < elems.length - 1 || node.trailingComma) {
+	            this.fail('Invalid destructuring pattern', elem);
+	          }
 	          elem = this.node(new PatternRestElement(elem.expression), elem.start, elem.end);
 	          this.checkPatternTarget(elem.pattern, binding);
 	          break;
@@ -1634,7 +1759,9 @@
 	          prop = this.node(new PatternProperty(prop.name, prop.expression, null), prop.start, prop.end);
 	          break;
 	        case 'SpreadExpression':
-	          if (i < props.length - 1 || node.trailingComma) this.fail('Invalid destructuring pattern', prop);
+	          if (i < props.length - 1 || node.trailingComma) {
+	            this.fail('Invalid destructuring pattern', prop);
+	          }
 	          switch (prop.expression.type) {
 	            case 'ObjectLiteral':
 	            case 'ObjectPattern':
@@ -1650,8 +1777,11 @@
 	          this.fail('Invalid pattern', prop);
 	      }
 	      props[i] = prop;
-	      if (prop.pattern) this.transformPatternElement(prop, binding);
-	      else this.checkPatternTarget(prop.name, binding);
+	      if (prop.pattern) {
+	        this.transformPatternElement(prop, binding);
+	      } else {
+	        this.checkPatternTarget(prop.name, binding);
+	      }
 	    }
 	  }
 
@@ -1666,7 +1796,9 @@
 
 	  transformIdentifier(node) {
 	    let value = node.value;
-	    if (isReservedWord(value)) this.fail('Unexpected token ' + value, node);
+	    if (isReservedWord(value)) {
+	      this.fail('Unexpected token ' + value, node);
+	    }
 	    this.checkIdentifier(node);
 	    node.context = 'variable';
 	  }
@@ -1696,13 +1828,17 @@
 	    }
 	    switch (node.type) {
 	      case 'Identifier':
-	        if (isPoisonIdent(node.value)) this.addStrictError('Cannot modify ' + node.value + ' in strict mode', node);
+	        if (isPoisonIdent(node.value)) {
+	          this.addStrictError('Cannot modify ' + node.value + ' in strict mode', node);
+	        }
 	        return;
 	      case 'MemberExpression':
 	        return;
 	      case 'ObjectPattern':
 	      case 'ArrayPattern':
-	        if (!simple) return;
+	        if (!simple) {
+	          return;
+	        }
 	        break;
 	      case 'ObjectLiteral':
 	        if (!simple) {
@@ -1727,7 +1863,9 @@
 	          this.checkIdentifier(node);
 	          node.context = 'declaration';
 	          let name = node.value;
-	          if (isPoisonIdent(name)) this.addStrictError(`Binding cannot be created for '${name}' in strict mode`, node);
+	          if (isPoisonIdent(name)) {
+	            this.addStrictError(`Binding cannot be created for '${name}' in strict mode`, node);
+	          }
 	          return;
 	        }
 	      case 'ArrayLiteral':
@@ -1748,9 +1886,13 @@
 
 	  checkIdentifier(node) {
 	    let ident = node.value;
-	    if (ident === 'yield' && this.context.isGenerator) this.fail('yield cannot be an identifier inside of a generator function', node);
-	    else if (ident === 'await' && this.context.isAsync) this.fail('await cannot be an identifier inside of an async function', node);
-	    else if (isStrictReservedWord(ident)) this.addStrictError(ident + ' cannot be used as an identifier in strict mode', node);
+	    if (ident === 'yield' && this.context.isGenerator) {
+	      this.fail('yield cannot be an identifier inside of a generator function', node);
+	    } else if (ident === 'await' && this.context.isAsync) {
+	      this.fail('await cannot be an identifier inside of an async function', node);
+	    } else if (isStrictReservedWord(ident)) {
+	      this.addStrictError(ident + ' cannot be used as an identifier in strict mode', node);
+	    }
 	  }
 
 	  checkParameters(params) {
@@ -1760,9 +1902,13 @@
 	        this.context.allowUseStrict = false;
 	        continue;
 	      }
-	      if (node.initializer) this.context.allowUseStrict = false;
+	      if (node.initializer) {
+	        this.context.allowUseStrict = false;
+	      }
 	      let name = node.pattern.value;
-	      if (isPoisonIdent(name)) this.addStrictError('Parameter name ' + name + ' is not allowed in strict mode', node);
+	      if (isPoisonIdent(name)) {
+	        this.addStrictError('Parameter name ' + name + ' is not allowed in strict mode', node);
+	      }
 	    }
 	  }
 
@@ -1773,13 +1919,23 @@
 	  }
 
 	  checkForInit(init, iterationType) {
-	    if (!init) return;
+	    if (!init) {
+	      return;
+	    }
 	    if (!iterationType) {
-	      if (init.type !== 'VariableDeclaration') return;
+	      if (init.type !== 'VariableDeclaration') {
+	        return;
+	      }
 	      init.declarations.forEach((decl) => {
-	        if (decl.initializer) return;
-	        if (init.kind === 'const') this.fail('Missing const initializer', decl.pattern);
-	        if (decl.pattern.type !== 'Identifier') this.fail('Missing pattern initializer', decl.pattern);
+	        if (decl.initializer) {
+	          return;
+	        }
+	        if (init.kind === 'const') {
+	          this.fail('Missing const initializer', decl.pattern);
+	        }
+	        if (decl.pattern.type !== 'Identifier') {
+	          this.fail('Missing pattern initializer', decl.pattern);
+	        }
 	      });
 	      return;
 	    }
@@ -1790,8 +1946,11 @@
 	      let decl = init.declarations[0];
 	      if (decl.initializer) {
 	        let msg = 'Invalid initializer in for-' + iterationType + ' statement';
-	        if (iterationType === 'in') this.addStrictError(msg, init);
-	        else this.fail(msg);
+	        if (iterationType === 'in') {
+	          this.addStrictError(msg, init);
+	        } else {
+	          this.fail(msg);
+	        }
 	      }
 	    } else {
 	      this.checkAssignmentTarget(this.unwrapParens(init));
@@ -1805,20 +1964,28 @@
 	      let item = list[i];
 	      let node = item.node;
 	      let error = node.error;
-	      if (!error) continue;
-	      if (item.strict && !context.strict) continue;
+	      if (!error) {
+	        continue;
+	      }
+	      if (item.strict && !context.strict) {
+	        continue;
+	      }
 	      this.fail(error, node);
 	    }
 	  }
 
 	  checkMethodExtraction(node) {
 	    node = this.unwrapParens(node);
-	    if (node.type !== 'MemberExpression') this.fail('Invalid method extraction expression', node);
+	    if (node.type !== 'MemberExpression') {
+	      this.fail('Invalid method extraction expression', node);
+	    }
 	  }
 
 	  checkDelete(node) {
 	    node = this.unwrapParens(node);
-	    if (node.type === 'Identifier') this.addStrictError('Cannot delete unqualified property in strict mode', node);
+	    if (node.type === 'Identifier') {
+	      this.addStrictError('Cannot delete unqualified property in strict mode', node);
+	    }
 	  }
 
 	  checkAnnotationTarget(node) {
@@ -1885,7 +2052,9 @@
 	}
 
 	function isAssignment(op) {
-	  if (op === '=') return true;
+	  if (op === '=') {
+	    return true;
+	  }
 	  switch (op) {
 	    case '*=':
 	    case '**=':
@@ -1935,12 +2104,16 @@
 	}
 
 	function keywordFromToken(token) {
-	  if (token.type === 'IDENTIFIER' && token.end - token.start === token.value.length) return token.value;
+	  if (token.type === 'IDENTIFIER' && token.end - token.start === token.value.length) {
+	    return token.value;
+	  }
 	  return '';
 	}
 
 	function keywordFromNode(node) {
-	  if (node.type === 'Identifier' && node.end - node.start === node.value.length) return node.value;
+	  if (node.type === 'Identifier' && node.end - node.start === node.value.length) {
+	    return node.value;
+	  }
 	  return '';
 	}
 
@@ -2030,18 +2203,26 @@
 	    let scanner = this.scanner;
 	    while (true) {
 	      let type = scanner.next(context);
-	      if (type === 'COMMENT') this.addComment(scanner);
-	      else break;
+	      if (type === 'COMMENT') {
+	        this.addComment(scanner);
+	      } else {
+	        break;
+	      }
 	    }
 	    return scanner;
 	  }
 
 	  nodeStart() {
-	    if (this.peek0) return this.peek0.start;
+	    if (this.peek0) {
+	      return this.peek0.start;
+	    }
 	    while (true) {
 	      let type = this.scanner.skip();
-	      if (type === 'COMMENT') this.addComment(this.scanner);
-	      else break;
+	      if (type === 'COMMENT') {
+	        this.addComment(this.scanner);
+	      } else {
+	        break;
+	      }
 	    }
 	    return this.scanner.offset;
 	  }
@@ -2067,7 +2248,9 @@
 	    this.peek0 = this.peek1;
 	    this.peek1 = null;
 	    this.tokenEnd = token.end;
-	    if (type && token.type !== type) this.unexpected(token);
+	    if (type && token.type !== type) {
+	      this.unexpected(token);
+	    }
 	    return token;
 	  }
 
@@ -2076,7 +2259,9 @@
 	  }
 
 	  peekToken(context) {
-	    if (!this.peek0) this.peek0 = this.nextToken(context);
+	    if (!this.peek0) {
+	      this.peek0 = this.nextToken(context);
+	    }
 	    return this.peek0;
 	  }
 
@@ -2085,7 +2270,9 @@
 	  }
 
 	  peekTokenAt(context, index) {
-	    if (index !== 1 || this.peek0 === null) throw new Error('Invalid lookahead');
+	    if (index !== 1 || this.peek0 === null) {
+	      throw new Error('Invalid lookahead');
+	    }
 	    if (this.peek1 === null) {
 	      this.peek0 = copyToken(this.peek0, this.tokenStash);
 	      this.peek1 = this.nextToken(context);
@@ -2112,7 +2299,9 @@
 
 	  readKeyword(word) {
 	    let token = this.readToken();
-	    if (token.type === word || keywordFromToken(token) === word) return token;
+	    if (token.type === word || keywordFromToken(token) === word) {
+	      return token;
+	    }
 	    this.unexpected(token);
 	  }
 
@@ -2159,17 +2348,25 @@
 
 	  peekAwait() {
 	    if (this.peekKeyword('await')) {
-	      if (this.context.functionBody && this.context.isAsync) return true;
-	      if (this.isModule) this.fail('Await is reserved within modules');
+	      if (this.context.functionBody && this.context.isAsync) {
+	        return true;
+	      }
+	      if (this.isModule) {
+	        return true;
+	      }
 	    }
 	    return false;
 	  }
 
 	  peekAsync() {
 	    let token = this.peekToken();
-	    if (keywordFromToken(token) !== 'async') return '';
+	    if (keywordFromToken(token) !== 'async') {
+	      return '';
+	    }
 	    token = this.peekTokenAt('div', 1);
-	    if (token.newlineBefore) return '';
+	    if (token.newlineBefore) {
+	      return '';
+	    }
 	    let type = token.type;
 	    return type === 'function' || type === '{' ? type : '';
 	  }
@@ -2202,7 +2399,9 @@
 	  }
 
 	  fail(msg, node) {
-	    if (!node) node = this.peekToken();
+	    if (!node) {
+	      node = this.peekToken();
+	    }
 	    let loc = this.scanner.lineMap.locate(node.start);
 	    let err = new SyntaxError(msg);
 	    err.line = loc.line;
@@ -2214,7 +2413,7 @@
 	  }
 
 	  unwrapParens(node) {
-	    for (; node.type === 'ParenExpression'; node = node.expression) ;
+	    for (; node.type === 'ParenExpression'; node = node.expression) {}
 	    return node;
 	  }
 
@@ -2243,8 +2442,11 @@
 	  popContext(collapse) {
 	    let context = this.context;
 	    let parent = context.parent;
-	    if (collapse) context.invalidNodes.forEach((node) => parent.invalidNodes.push(node));
-	    else this.checkInvalidNodes();
+	    if (collapse) {
+	      context.invalidNodes.forEach((node) => parent.invalidNodes.push(node));
+	    } else {
+	      this.checkInvalidNodes();
+	    }
 	    this.context = this.context.parent;
 	  }
 
@@ -2266,7 +2468,9 @@
 
 	  setLabel(label, value) {
 	    let m = this.context.labelMap;
-	    if (!m) m = this.context.labelMap = new Map();
+	    if (!m) {
+	      m = this.context.labelMap = new Map();
+	    }
 	    m.set(label, value);
 	  }
 
@@ -2319,14 +2523,18 @@
 	    let list = null;
 	    while (this.peek('div') === ',') {
 	      this.read();
-	      if (list === null) expr = this.node(new SequenceExpression(list = [expr]), expr.start);
+	      if (list === null) {
+	        expr = this.node(new SequenceExpression(list = [expr]), expr.start);
+	      }
 	      if (this.peek() === ')') {
 	        this.addInvalidNode('Invalid trailing comma in sequence expression', expr);
 	        break;
 	      }
 	      list.push(this.AssignmentExpression(noIn));
 	    }
-	    if (list) expr.end = this.tokenEnd;
+	    if (list) {
+	      expr.end = this.tokenEnd;
+	    }
 	    return expr;
 	  }
 
@@ -2336,13 +2544,21 @@
 	    if (this.peek() === '...') {
 	      this.read();
 	      node = this.node(new SpreadExpression(this.AssignmentExpression(noIn)), start);
-	      if (!allowSpread) this.addInvalidNode('Invalid spread expression', node);
+	      if (!allowSpread) {
+	        this.addInvalidNode('Invalid spread expression', node);
+	      }
 	      return node;
 	    }
-	    if (this.peekYield()) return this.YieldExpression(noIn);
+	    if (this.peekYield()) {
+	      return this.YieldExpression(noIn);
+	    }
 	    node = this.ConditionalExpression(noIn);
-	    if (node.type === 'ArrowFunctionHead') return this.ArrowFunctionBody(node, noIn);
-	    if (!isAssignment(this.peek('div'))) return node;
+	    if (node.type === 'ArrowFunctionHead') {
+	      return this.ArrowFunctionBody(node, noIn);
+	    }
+	    if (!isAssignment(this.peek('div'))) {
+	      return node;
+	    }
 	    this.checkAssignmentTarget(node, false);
 	    return this.node(new AssignmentExpression(node, this.read(), this.AssignmentExpression(noIn)), start);
 	  }
@@ -2364,12 +2580,16 @@
 	  }
 
 	  ConditionalExpression(noIn) {
-	    if (this.peekTrivialExpression()) return this.PrimaryExpression();
+	    if (this.peekTrivialExpression()) {
+	      return this.PrimaryExpression();
+	    }
 	    let start = this.nodeStart();
 	    let left = this.BinaryExpression(noIn);
 	    let middle;
 	    let right;
-	    if (this.peek('div') !== '?') return left;
+	    if (this.peek('div') !== '?') {
+	      return left;
+	    }
 	    this.read('?');
 	    middle = this.AssignmentExpression();
 	    this.read(':');
@@ -2388,17 +2608,25 @@
 	    let op = '';
 	    let rhs;
 	    while (next = this.peek('div')) {
-	      if (next === 'in' && noIn) break;
-	      if (next === '**' && lhs.type === 'UnaryExpression') this.fail();
+	      if (next === 'in' && noIn) {
+	        break;
+	      }
+	      if (next === '**' && lhs.type === 'UnaryExpression') {
+	        this.fail();
+	      }
 	      prec = getPrecedence(next);
-	      if (prec === 0 || prec < minPrec) break;
+	      if (prec === 0 || prec < minPrec) {
+	        break;
+	      }
 	      this.read();
 	      op = next;
 	      max = prec;
 	      rhs = this.UnaryExpression();
 	      while (next = this.peek('div')) {
 	        prec = getPrecedence(next);
-	        if (prec === 0 || prec <= max) break;
+	        if (prec === 0 || prec <= max) {
+	          break;
+	        }
 	        rhs = this.PartialBinaryExpression(rhs, prec, noIn);
 	      }
 	      lhs = this.node(new BinaryExpression(lhs, op, rhs), lhs.start, rhs.end);
@@ -2503,7 +2731,9 @@
 	              exit = true;
 	              break;
 	            }
-	            if (isSuper && !this.context.allowSuperCall) this.fail('Invalid super call');
+	            if (isSuper && !this.context.allowSuperCall) {
+	              this.fail('Invalid super call');
+	            }
 	            let arrowType = '';
 	            if (keywordFromNode(expr) === 'async' && !token.newlineBefore) {
 	              arrowType = 'async';
@@ -2530,11 +2760,15 @@
 	            break;
 	          }
 	        case 'TEMPLATE':
-	          if (isSuper) this.fail();
+	          if (isSuper) {
+	            this.fail();
+	          }
 	          expr = this.node(new TaggedTemplateExpression(expr, this.TemplateExpression()), start);
 	          break;
 	        default:
-	          if (isSuper) this.fail();
+	          if (isSuper) {
+	            this.fail();
+	          }
 	          exit = true;
 	          break;
 	      }
@@ -2558,7 +2792,9 @@
 	      }
 	      this.read(')');
 	    }
-	    if (expr.type === 'SuperKeyword') this.fail('Invalid super keyword', expr);
+	    if (expr.type === 'SuperKeyword') {
+	      this.fail('Invalid super keyword', expr);
+	    }
 	    return this.node(new NewExpression(expr, args, trailingComma), start);
 	  }
 
@@ -2567,18 +2803,24 @@
 	    let start = token.start;
 	    let left = token.type === 'IDENTIFIER' ? token.value : token.type;
 	    let right;
-	    if (left === 'import' && !this.isModule) this.fail('Invalid meta property', token);
+	    if (left === 'import' && !this.isModule) {
+	      this.fail('Invalid meta property', token);
+	    }
 	    this.read('.');
 	    token = this.readToken('IDENTIFIER', 'name');
 	    right = token.value;
-	    if (!isValidMeta(left, right)) this.fail('Invalid meta property', token);
+	    if (!isValidMeta(left, right)) {
+	      this.fail('Invalid meta property', token);
+	    }
 	    return this.node(new MetaProperty(left, right), start);
 	  }
 
 	  SuperKeyword() {
 	    let token = this.readToken('super');
 	    let node = this.node(new SuperKeyword(), token.start, token.end);
-	    if (!this.context.isMethod) this.fail('Super keyword outside of method', node);
+	    if (!this.context.isMethod) {
+	      this.fail('Super keyword outside of method', node);
+	    }
 	    return node;
 	  }
 
@@ -2587,7 +2829,9 @@
 	    while (this.peekUntil(')')) {
 	      list.push(this.AssignmentExpression(false, true));
 	      if (this.peek() === ',') {
-	        if (this.peekAt('', 1) === ')') break;
+	        if (this.peekAt('', 1) === ')') {
+	          break;
+	        }
 	        this.read();
 	      }
 	    }
@@ -2631,7 +2875,9 @@
 	            this.pushContext(true);
 	            let ident = this.BindingIdentifier();
 	            next = this.peekToken();
-	            if (next.type !== '=>' || next.newlineBefore) this.fail();
+	            if (next.type !== '=>' || next.newlineBefore) {
+	              this.fail();
+	            }
 	            return this.ArrowFunctionHead(value, ident, start);
 	          }
 	        }
@@ -2672,14 +2918,18 @@
 	  StringLiteral() {
 	    let token = this.readToken('STRING');
 	    let node = this.node(new StringLiteral(token.value), token.start, token.end);
-	    if (token.strictError) this.addStrictError(token.strictError, node);
+	    if (token.strictError) {
+	      this.addStrictError(token.strictError, node);
+	    }
 	    return node;
 	  }
 
 	  NumberLiteral() {
 	    let token = this.readToken('NUMBER');
 	    let node = this.node(new NumberLiteral(token.number, token.numberSuffix), token.start, token.end);
-	    if (token.strictError) this.addStrictError(token.strictError, node);
+	    if (token.strictError) {
+	      this.addStrictError(token.strictError, node);
+	    }
 	    return node;
 	  }
 
@@ -2688,7 +2938,9 @@
 	    let end = token.templateEnd;
 	    let node;
 	    node = this.node(new TemplatePart(token.value, this.scanner.rawValue(token.start + 1, token.end - (end ? 1 : 2)), end), token.start, token.end);
-	    if (token.strictError) this.addStrictError(token.strictError, node);
+	    if (token.strictError) {
+	      this.addStrictError(token.strictError, node);
+	    }
 	    return node;
 	  }
 
@@ -2727,14 +2979,18 @@
 	    this.read('(');
 	    if (this.peek() === ')') {
 	      next = this.peekTokenAt('', 1);
-	      if (next.newlineBefore || next.type !== '=>') this.fail();
+	      if (next.newlineBefore || next.type !== '=>') {
+	        this.fail();
+	      }
 	      this.read(')');
 	      return this.ArrowFunctionHead('', null, start);
 	    }
 	    let expr = this.Expression();
 	    this.read(')');
 	    next = this.peekToken('div');
-	    if (!next.newlineBefore && next.type === '=>') return this.ArrowFunctionHead('', expr, start);
+	    if (!next.newlineBefore && next.type === '=>') {
+	      return this.ArrowFunctionHead('', expr, start);
+	    }
 	    this.popContext(true);
 	    return this.node(new ParenExpression(expr), start);
 	  }
@@ -2764,7 +3020,9 @@
 	  }
 
 	  PropertyDefinition() {
-	    if (this.peek('name') === '*') return this.MethodDefinition(null, '');
+	    if (this.peek('name') === '*') {
+	      return this.MethodDefinition(null, '');
+	    }
 	    let start = this.nodeStart();
 	    let node;
 	    let name;
@@ -2851,23 +3109,12 @@
 	    return this.node(new TemplateExpression(parts), start);
 	  }
 
-	  AsyncBlock() {
-	    let start = this.nodeStart();
-	    this.read();
-	    this.pushContext();
-	    this.context.isAsync = true;
-	    this.context.functionBody = true;
-	    this.read('{');
-	    let statements = this.StatementList(true);
-	    this.read('}');
-	    this.popContext();
-	    return this.node(new AsyncBlock(statements), start);
-	  }
-
 	  Statement(label) {
 	    switch (this.peek()) {
 	      case 'IDENTIFIER':
-	        if (this.peekAt('div', 1) === ':') return this.LabelledStatement();
+	        if (this.peekAt('div', 1) === ':') {
+	          return this.LabelledStatement();
+	        }
 	        return this.ExpressionStatement();
 	      case '{':
 	        return this.Block();
@@ -2918,7 +3165,9 @@
 	    if (type === ';') {
 	      this.read();
 	    } else if (type === '}' || type === 'EOF' || token.newlineBefore) {
-	      if (this.onASI && !this.onASI(token)) this.unexpected(token);
+	      if (this.onASI && !this.onASI(token)) {
+	        this.unexpected(token);
+	      }
 	    } else {
 	      this.unexpected(token);
 	    }
@@ -2928,7 +3177,9 @@
 	    let start = this.nodeStart();
 	    let label = this.Identifier();
 	    let name = label.value;
-	    if (this.getLabel(name) > 0) this.fail('Invalid label', label);
+	    if (this.getLabel(name) > 0) {
+	      this.fail('Invalid label', label);
+	    }
 	    this.read(':');
 	    this.setLabel(name, 1);
 	    let statement;
@@ -2981,8 +3232,11 @@
 	    this.read();
 	    while (true) {
 	      list.push(this.VariableDeclarator(noIn, kind));
-	      if (this.peek() === ',') this.read();
-	      else break;
+	      if (this.peek() === ',') {
+	        this.read();
+	      } else {
+	        break;
+	      }
 	    }
 	    return this.node(new VariableDeclaration(kind, list), start);
 	  }
@@ -3001,7 +3255,9 @@
 	  }
 
 	  ReturnStatement() {
-	    if (!this.context.isFunction) this.fail('Return statement outside of function');
+	    if (!this.context.isFunction) {
+	      this.fail('Return statement outside of function');
+	    }
 	    let start = this.nodeStart();
 	    this.read('return');
 	    let value = this.peekExpressionEnd() ? null : this.Expression();
@@ -3017,7 +3273,9 @@
 	    this.Semicolon();
 	    let node = this.node(new BreakStatement(label), start);
 	    if (label) {
-	      if (this.getLabel(label.value) === 0) this.fail('Invalid label', label);
+	      if (this.getLabel(label.value) === 0) {
+	        this.fail('Invalid label', label);
+	      }
 	    } else if (context.loopDepth === 0 && context.switchDepth === 0) {
 	      this.fail('Break not contained within a switch or loop', node);
 	    }
@@ -3032,7 +3290,9 @@
 	    this.Semicolon();
 	    let node = this.node(new ContinueStatement(label), start);
 	    if (label) {
-	      if (this.getLabel(label.value) !== 2) this.fail('Invalid label', label);
+	      if (this.getLabel(label.value) !== 2) {
+	        this.fail('Invalid label', label);
+	      }
 	    } else if (context.loopDepth === 0) {
 	      this.fail('Continue not contained within a loop', node);
 	    }
@@ -3043,7 +3303,9 @@
 	    let start = this.nodeStart();
 	    this.read('throw');
 	    let expr = this.peekExpressionEnd() ? null : this.Expression();
-	    if (expr === null) this.fail('Missing throw expression');
+	    if (expr === null) {
+	      this.fail('Missing throw expression');
+	    }
 	    this.Semicolon();
 	    return this.node(new ThrowStatement(expr), start);
 	  }
@@ -3075,7 +3337,9 @@
 	    let start = this.nodeStart();
 	    let body;
 	    let test;
-	    if (label) this.setLabel(label, 2);
+	    if (label) {
+	      this.setLabel(label, 2);
+	    }
 	    this.read('do');
 	    this.context.loopDepth += 1;
 	    body = this.Statement();
@@ -3089,7 +3353,9 @@
 
 	  WhileStatement(label) {
 	    let start = this.nodeStart();
-	    if (label) this.setLabel(label, 2);
+	    if (label) {
+	      this.setLabel(label, 2);
+	    }
 	    this.read('while');
 	    this.read('(');
 	    let expr = this.Expression();
@@ -3106,7 +3372,9 @@
 	    let async = false;
 	    let test;
 	    let step;
-	    if (label) this.setLabel(label, 2);
+	    if (label) {
+	      this.setLabel(label, 2);
+	    }
 	    this.read('for');
 	    if (this.peekAwait()) {
 	      this.read();
@@ -3127,8 +3395,12 @@
 	        init = this.Expression(true);
 	        break;
 	    }
-	    if (async || init && this.peekKeyword('of')) return this.ForOfStatement(async, init, start);
-	    if (init && this.peek() === 'in') return this.ForInStatement(init, start);
+	    if (async || init && this.peekKeyword('of')) {
+	      return this.ForOfStatement(async, init, start);
+	    }
+	    if (init && this.peek() === 'in') {
+	      return this.ForInStatement(init, start);
+	    }
 	    this.checkForInit(init, '');
 	    this.read(';');
 	    test = this.peek() === ';' ? null : this.Expression();
@@ -3186,7 +3458,9 @@
 	    while (this.peekUntil('}')) {
 	      node = this.SwitchCase();
 	      if (node.test === null) {
-	        if (hasDefault) this.fail('Switch statement cannot have more than one default', node);
+	        if (hasDefault) {
+	          this.fail('Switch statement cannot have more than one default', node);
+	        }
 	        hasDefault = true;
 	      }
 	      cases.push(node);
@@ -3209,7 +3483,9 @@
 	    }
 	    this.read(':');
 	    while (type = this.peekUntil('}')) {
-	      if (type === 'case' || type === 'default') break;
+	      if (type === 'case' || type === 'default') {
+	        break;
+	      }
 	      list.push(this.StatementListItem());
 	    }
 	    return this.node(new SwitchCase(expr, list), start);
@@ -3221,7 +3497,9 @@
 	    let tryBlock = this.Block();
 	    let handler = null;
 	    let fin = null;
-	    if (this.peek() === 'catch') handler = this.CatchClause();
+	    if (this.peek() === 'catch') {
+	      handler = this.CatchClause();
+	    }
 	    if (this.peek() === 'finally') {
 	      this.read('finally');
 	      fin = this.Block();
@@ -3259,7 +3537,9 @@
 	          if (isDirective(dir)) {
 	            node = this.node(new Directive(dir, expr), node.start, node.end);
 	            if (dir === 'use strict') {
-	              if (!this.context.allowUseStrict) this.fail('Invalid "use strict" directive', node);
+	              if (!this.context.allowUseStrict) {
+	                this.fail('Invalid "use strict" directive', node);
+	              }
 	              this.setStrict(true);
 	            }
 	          }
@@ -3281,12 +3561,11 @@
 	      case 'const':
 	        return this.LexicalDeclaration();
 	      case 'IDENTIFIER':
-	        if (this.peekLet()) return this.LexicalDeclaration();
-	        switch (this.peekAsync()) {
-	          case 'function':
-	            return this.FunctionDeclaration();
-	          case '{':
-	            return this.AsyncBlock();
+	        if (this.peekLet()) {
+	          return this.LexicalDeclaration();
+	        }
+	        if (this.peekAsync() === 'function') {
+	          return this.FunctionDeclaration();
 	        }
 	        break;
 	    }
@@ -3339,7 +3618,9 @@
 	    }
 	    this.pushContext();
 	    this.setFunctionType(kind);
-	    if (this.peek() !== '(') ident = this.BindingIdentifier();
+	    if (this.peek() !== '(') {
+	      ident = this.BindingIdentifier();
+	    }
 	    let params = this.FormalParameters();
 	    let body = this.FunctionBody();
 	    this.popContext();
@@ -3353,7 +3634,9 @@
 	      kind = 'generator';
 	      name = this.PropertyName();
 	    } else {
-	      if (!name) name = this.PropertyName();
+	      if (!name) {
+	        name = this.PropertyName();
+	      }
 	      let val = keywordFromNode(name);
 	      let next = this.peekToken('name');
 	      switch (next.type) {
@@ -3382,7 +3665,9 @@
 	    this.pushContext();
 	    this.context.isMethod = true;
 	    this.setFunctionType(kind);
-	    if (kind === 'constructor' && classKind === 'derived') this.context.allowSuperCall = true;
+	    if (kind === 'constructor' && classKind === 'derived') {
+	      this.context.allowSuperCall = true;
+	    }
 	    let params = kind === 'get' || kind === 'set' ? this.AccessorParameters(kind) : this.FormalParameters();
 	    let body = this.FunctionBody();
 	    this.popContext();
@@ -3392,7 +3677,9 @@
 	  AccessorParameters(kind) {
 	    let list = [];
 	    this.read('(');
-	    if (kind === 'set') list.push(this.FormalParameter(false));
+	    if (kind === 'set') {
+	      list.push(this.FormalParameter(false));
+	    }
 	    this.read(')');
 	    this.checkParameters(list);
 	    return list;
@@ -3407,7 +3694,9 @@
 	        break;
 	      }
 	      list.push(this.FormalParameter(true));
-	      if (this.peek() !== ')') this.read(',');
+	      if (this.peek() !== ')') {
+	        this.read(',');
+	      }
 	    }
 	    this.read(')');
 	    this.checkParameters(list);
@@ -3442,7 +3731,9 @@
 
 	  ArrowFunctionHead(kind, params, start) {
 	    this.setFunctionType(kind);
-	    if (this.context.hasYieldAwait) this.fail('Invalid yield or await within arrow function head');
+	    if (this.context.hasYieldAwait) {
+	      this.fail('Invalid yield or await within arrow function head');
+	    }
 	    let formals = this.checkArrowParameters(params);
 	    return this.node(new ArrowFunctionHead(formals), start);
 	  }
@@ -3470,7 +3761,25 @@
 	      kind = 'derived';
 	      base = this.MemberExpression(true);
 	    }
-	    return this.node(new ClassDeclaration(ident, base, this.ClassBody(kind)), start);
+	    let mixins = null;
+	    if (this.peek() === 'with') {
+	      this.read();
+	      mixins = this.ClassMixinList();
+	    }
+	    return this.node(new ClassDeclaration(ident, base, mixins, this.ClassBody(kind)), start);
+	  }
+
+	  ClassMixinList() {
+	    let list = [];
+	    while (true) {
+	      list.push(this.MemberExpression(true));
+	      if (this.peek() === ',') {
+	        this.read();
+	      } else {
+	        break;
+	      }
+	    }
+	    return list;
 	  }
 
 	  ClassExpression() {
@@ -3479,13 +3788,20 @@
 	    let ident = null;
 	    let base = null;
 	    this.read('class');
-	    if (this.peek() === 'IDENTIFIER') ident = this.BindingIdentifier();
+	    if (this.peek() === 'IDENTIFIER') {
+	      ident = this.BindingIdentifier();
+	    }
 	    if (this.peek() === 'extends') {
 	      this.read();
 	      kind = 'derived';
 	      base = this.MemberExpression(true);
 	    }
-	    return this.node(new ClassExpression(ident, base, this.ClassBody(kind)), start);
+	    let mixins = null;
+	    if (this.peek() === 'with') {
+	      this.read();
+	      mixins = this.ClassMixinList();
+	    }
+	    return this.node(new ClassExpression(ident, base, mixins, this.ClassBody(kind)), start);
 	  }
 
 	  ClassBody(classKind) {
@@ -3504,7 +3820,9 @@
 	      switch (elem.type) {
 	        case 'MethodDefinition':
 	          if (elem.kind === 'constructor') {
-	            if (hasConstructor) this.fail('Duplicate constructor definitions', elem.name);
+	            if (hasConstructor) {
+	              this.fail('Duplicate constructor definitions', elem.name);
+	            }
 	            hasConstructor = true;
 	          }
 	          break;
@@ -3526,7 +3844,9 @@
 	    let token = this.peekToken('name');
 	    let start = token.start;
 	    let isStatic = false;
-	    if (token.type === ';') return this.EmptyClassElement();
+	    if (token.type === ';') {
+	      return this.EmptyClassElement();
+	    }
 	    if (token.type === 'IDENTIFIER' && token.value === 'static') {
 	      switch (this.peekAt('name', 1)) {
 	        case 'IDENTIFIER':
@@ -3541,7 +3861,9 @@
 	    let name = null;
 	    if (token.type === 'IDENTIFIER' || token.type === '[') {
 	      name = this.PropertyName();
-	      if (!isStatic && name.type === 'Identifier' && name.value === 'constructor') kind = 'constructor';
+	      if (!isStatic && name.type === 'Identifier' && name.value === 'constructor') {
+	        kind = 'constructor';
+	      }
 	    }
 	    let method = this.MethodDefinition(name, kind, classKind);
 	    name = method.name;
@@ -3552,7 +3874,9 @@
 	      } else {
 	        invalid = name.value === 'constructor' && method.kind !== 'constructor';
 	      }
-	      if (invalid) this.fail('Invalid ' + name.value + ' property in class definition', name);
+	      if (invalid) {
+	        this.fail('Invalid ' + name.value + ' property in class definition', name);
+	      }
 	    }
 	    method.start = start;
 	    method.static = isStatic;
@@ -3672,7 +3996,9 @@
 	    this.read('{');
 	    while (this.peekUntil('}')) {
 	      list.push(this.ImportSpecifier());
-	      if (this.peek() === ',') this.read();
+	      if (this.peek() === ',') {
+	        this.read();
+	      }
 	    }
 	    this.read('}');
 	    return this.node(new NamedImports(list), start);
@@ -3722,9 +4048,13 @@
 	        decl = this.ClassDeclaration();
 	        break;
 	      case 'IDENTIFIER':
-	        if (this.peekLet()) decl = this.LexicalDeclaration();
-	        else if (this.peekAsync() === 'function') decl = this.FunctionDeclaration();
-	        else return this.ExportDefaultFrom(start);
+	        if (this.peekLet()) {
+	          decl = this.LexicalDeclaration();
+	        } else if (this.peekAsync() === 'function') {
+	          decl = this.FunctionDeclaration();
+	        } else {
+	          return this.ExportDefaultFrom(start);
+	        }
 	        break;
 	      default:
 	        this.fail();
@@ -3750,7 +4080,9 @@
 	        break;
 	    }
 	    let isDecl = this.transformDefaultExport(binding);
-	    if (!isDecl) this.Semicolon();
+	    if (!isDecl) {
+	      this.Semicolon();
+	    }
 	    return this.node(new ExportDefault(binding), start);
 	  }
 
@@ -3760,7 +4092,9 @@
 	    this.read('{');
 	    while (this.peekUntil('}', 'name')) {
 	      list.push(this.ExportSpecifier());
-	      if (this.peek() === ',') this.read();
+	      if (this.peek() === ',') {
+	        this.read();
+	      }
 	    }
 	    this.read('}');
 	    if (this.peekKeyword('from')) {
@@ -3823,8 +4157,11 @@
 	    this.read('[');
 	    while (this.peekUntil(']')) {
 	      list.push(this.Expression());
-	      if (this.peek() === ',') this.read();
-	      else break;
+	      if (this.peek() === ',') {
+	        this.read();
+	      } else {
+	        break;
+	      }
 	    }
 	    this.read(']');
 	    return this.node(new Annotation(list), start);
@@ -3870,7 +4207,9 @@
 	  }
 
 	  addMapping(node) {
-	    if (typeof node.start !== 'number' || node.start < 0 || node.start === this.inputStart) return;
+	    if (typeof node.start !== 'number' || node.start < 0 || node.start === this.inputStart) {
+	      return;
+	    }
 	    this.inputStart = node.start;
 	    let original = this.inputLineMap.locate(this.inputStart);
 	    let generated = {
@@ -3888,7 +4227,9 @@
 	      count -= 1;
 	    }
 	    this.currentLineOffset = this.output.length;
-	    if (this.indentWidth > 0) this.output += ' '.repeat(this.indentWidth * this.depth);
+	    if (this.indentWidth > 0) {
+	      this.output += ' '.repeat(this.indentWidth * this.depth);
+	    }
 	  }
 
 	  print(ast, options = {}) {
@@ -3960,8 +4301,11 @@
 	          this.newline();
 	          break;
 	        default:
-	          if (typeof args[i] === 'string') this.output += args[i];
-	          else this.printNode(args[i]);
+	          if (typeof args[i] === 'string') {
+	            this.output += args[i];
+	          } else {
+	            this.printNode(args[i]);
+	          }
 	          break;
 	      }
 	    }
@@ -3972,13 +4316,20 @@
 	    for (let i = 0; i < list.length; ++i) {
 	      let node = list[i];
 	      if (i > 0) {
-	        if (typeof sep === 'function') sep(node, prev);
-	        else if (sep === undefined) this.write(',', SPACE);
-	        else if (Array.isArray(sep)) this.write(...sep);
-	        else this.write(sep);
+	        if (typeof sep === 'function') {
+	          sep(node, prev);
+	        } else if (sep === undefined) {
+	          this.write(',', SPACE);
+	        } else if (Array.isArray(sep)) {
+	          this.write(...sep);
+	        } else {
+	          this.write(sep);
+	        }
 	      }
 	      this.printNode(node);
-	      if (node && node.type === 'VariableDeclaration') this.write(';');
+	      if (node && node.type === 'VariableDeclaration') {
+	        this.write(';');
+	      }
 	      prev = node;
 	    }
 	  }
@@ -4066,7 +4417,9 @@
 
 	  YieldExpression(node) {
 	    this.write('yield');
-	    if (node.delegate) this.write(SPACE, '*');
+	    if (node.delegate) {
+	      this.write(SPACE, '*');
+	    }
 	    this.write(SPACE, node.expression);
 	  }
 
@@ -4079,19 +4432,26 @@
 	  }
 
 	  UpdateExpression(node) {
-	    if (node.prefix) this.write(node.operator, node.expression);
-	    else this.write(node.expression, node.operator);
+	    if (node.prefix) {
+	      this.write(node.operator, node.expression);
+	    } else {
+	      this.write(node.expression, node.operator);
+	    }
 	  }
 
 	  UnaryExpression(node) {
 	    this.write(node.operator);
-	    if (node.operator.length > 1) this.write(' ');
+	    if (node.operator.length > 1) {
+	      this.write(' ');
+	    }
 	    this.write(node.expression);
 	  }
 
 	  MemberExpression(node) {
 	    this.write(node.object);
-	    if (node.property.type === 'Identifier') this.write('.');
+	    if (node.property.type === 'Identifier') {
+	      this.write('.');
+	    }
 	    this.write(node.property);
 	  }
 
@@ -4173,8 +4533,12 @@
 
 	  PatternProperty(node) {
 	    this.write(node.name);
-	    if (node.pattern) this.write(':', SPACE, node.pattern);
-	    if (node.initializer) this.write(SPACE, '=', SPACE, node.initializer);
+	    if (node.pattern) {
+	      this.write(':', SPACE, node.pattern);
+	    }
+	    if (node.initializer) {
+	      this.write(SPACE, '=', SPACE, node.initializer);
+	    }
 	  }
 
 	  ArrayPattern(node) {
@@ -4185,7 +4549,9 @@
 
 	  PatternElement(node) {
 	    this.write(node.pattern);
-	    if (node.initializer) this.write(SPACE, '=', SPACE, node.initializer);
+	    if (node.initializer) {
+	      this.write(SPACE, '=', SPACE, node.initializer);
+	    }
 	  }
 
 	  PatternRestElement(node) {
@@ -4193,7 +4559,9 @@
 	  }
 
 	  MethodDefinition(node) {
-	    if (node.static) this.write('static ');
+	    if (node.static) {
+	      this.write('static ');
+	    }
 	    switch (node.kind) {
 	      case 'generator':
 	        this.write('*');
@@ -4255,7 +4623,9 @@
 
 	  VariableDeclarator(node) {
 	    this.write(node.pattern);
-	    if (node.initializer) this.write(SPACE, '=', SPACE, node.initializer);
+	    if (node.initializer) {
+	      this.write(SPACE, '=', SPACE, node.initializer);
+	    }
 	  }
 
 	  ReturnStatement(node) {
@@ -4268,13 +4638,17 @@
 
 	  BreakStatement(node) {
 	    this.write('break');
-	    if (node.label) this.write(' ', node.label);
+	    if (node.label) {
+	      this.write(' ', node.label);
+	    }
 	    this.write(';');
 	  }
 
 	  ContinueStatement(node) {
 	    this.write('continue');
-	    if (node.label) this.write(' ', node.label);
+	    if (node.label) {
+	      this.write(' ', node.label);
+	    }
 	    this.write(';');
 	  }
 
@@ -4311,7 +4685,9 @@
 
 	  ForOfStatement(node) {
 	    this.write('for');
-	    if (node.async) this.write(' await');
+	    if (node.async) {
+	      this.write(' await');
+	    }
 	    this.write(SPACE, '(', node.left, ' of ', node.right, ')', SPACE, node.body);
 	  }
 
@@ -4326,8 +4702,11 @@
 	  }
 
 	  SwitchCase(node) {
-	    if (node.test) this.write('case ', node.test, ':');
-	    else this.write('default:');
+	    if (node.test) {
+	      this.write('case ', node.test, ':');
+	    } else {
+	      this.write('default:');
+	    }
 	    if (node.consequent.length > 0) {
 	      this.write(INDENT);
 	      this.writeStatements(node.consequent);
@@ -4337,8 +4716,12 @@
 
 	  TryStatement(node) {
 	    this.write('try', SPACE, node.block);
-	    if (node.handler) this.write(SPACE, node.handler);
-	    if (node.finalizer) this.write(SPACE, 'finally', SPACE, node.finalizer);
+	    if (node.handler) {
+	      this.write(SPACE, node.handler);
+	    }
+	    if (node.finalizer) {
+	      this.write(SPACE, 'finally', SPACE, node.finalizer);
+	    }
 	  }
 
 	  CatchClause(node) {
@@ -4350,10 +4733,16 @@
 	  }
 
 	  FunctionExpression(node) {
-	    if (node.kind === 'async' || node.kind === 'async-generator') this.write('async ');
+	    if (node.kind === 'async' || node.kind === 'async-generator') {
+	      this.write('async ');
+	    }
 	    this.write('function');
-	    if (node.kind === 'generator' || node.kind === 'async-generator') this.write('*');
-	    if (node.identifier) this.write(' ', node.identifier);
+	    if (node.kind === 'generator' || node.kind === 'async-generator') {
+	      this.write('*');
+	    }
+	    if (node.identifier) {
+	      this.write(' ', node.identifier);
+	    }
 	    this.write('(');
 	    this.writeList(node.params);
 	    this.write(')', SPACE, node.body);
@@ -4361,7 +4750,9 @@
 
 	  FormalParameter(node) {
 	    this.write(node.pattern);
-	    if (node.initializer) this.write(SPACE, '=', SPACE, node.initializer);
+	    if (node.initializer) {
+	      this.write(SPACE, '=', SPACE, node.initializer);
+	    }
 	  }
 
 	  RestParameter(node) {
@@ -4379,7 +4770,9 @@
 	  }
 
 	  ArrowFunction(node) {
-	    if (node.kind === 'async') this.write('async ');
+	    if (node.kind === 'async') {
+	      this.write('async ');
+	    }
 	    this.write('(');
 	    this.writeList(node.params);
 	    this.write(')', SPACE, '=>', SPACE, node.body);
@@ -4391,8 +4784,12 @@
 
 	  ClassExpression(node) {
 	    this.write('class');
-	    if (node.identifier) this.write(' ', node.identifier);
-	    if (node.base) this.write(' extends ', node.base);
+	    if (node.identifier) {
+	      this.write(' ', node.identifier);
+	    }
+	    if (node.base) {
+	      this.write(' extends ', node.base);
+	    }
 	    this.write(SPACE, node.body);
 	  }
 
@@ -4402,8 +4799,11 @@
 	    } else {
 	      this.write('{', INDENT);
 	      this.writeList(node.elements, (node, prev) => {
-	        if (!(node.type === 'ClassField' && prev.type === 'ClassField')) this.newline(2);
-	        else this.newline();
+	        if (!(node.type === 'ClassField' && prev.type === 'ClassField')) {
+	          this.newline(2);
+	        } else {
+	          this.newline();
+	        }
 	      });
 	      this.write(OUTDENT, '}');
 	    }
@@ -4414,9 +4814,13 @@
 	  }
 
 	  ClassField(node) {
-	    if (node.static) this.write('static ');
+	    if (node.static) {
+	      this.write('static ');
+	    }
 	    this.write(node.name);
-	    if (node.initializer) this.write(SPACE, '=', SPACE, node.initializer);
+	    if (node.initializer) {
+	      this.write(SPACE, '=', SPACE, node.initializer);
+	    }
 	    this.write(';');
 	  }
 
@@ -4426,7 +4830,9 @@
 
 	  ImportDeclaration(node) {
 	    this.write('import ');
-	    if (node.imports) this.write(node.imports, ' from ');
+	    if (node.imports) {
+	      this.write(node.imports, ' from ');
+	    }
 	    this.write(node.from, ';');
 	  }
 
@@ -4442,12 +4848,16 @@
 
 	  DefaultImport(node) {
 	    this.write(node.identifier);
-	    if (node.imports) this.write(',', SPACE, node.imports);
+	    if (node.imports) {
+	      this.write(',', SPACE, node.imports);
+	    }
 	  }
 
 	  ImportSpecifier(node) {
 	    this.write(node.imported);
-	    if (node.local) this.write(' as ', node.local);
+	    if (node.local) {
+	      this.write(' as ', node.local);
+	    }
 	  }
 
 	  ExportDeclaration(node) {
@@ -4465,13 +4875,17 @@
 	    this.write('export', SPACE, '{', SPACE);
 	    this.writeList(node.specifiers);
 	    this.write(SPACE, '}');
-	    if (node.from) this.write(SPACE, 'from', SPACE, node.from);
+	    if (node.from) {
+	      this.write(SPACE, 'from', SPACE, node.from);
+	    }
 	    this.write(';');
 	  }
 
 	  ExportNamespace(node) {
 	    this.write('export *');
-	    if (node.identifier) this.write(' as ', node.identifier);
+	    if (node.identifier) {
+	      this.write(' as ', node.identifier);
+	    }
 	    this.write(' from ', node.from, ';');
 	  }
 
@@ -4481,7 +4895,9 @@
 
 	  ExportSpecifier(node) {
 	    this.write(node.local);
-	    if (node.exported) this.write(' as ', node.exported);
+	    if (node.exported) {
+	      this.write(' as ', node.exported);
+	    }
 	  }
 	}
 
@@ -4501,8 +4917,12 @@
 
 	  resolveName(name) {
 	    let record = this.names.get(name);
-	    if (record) return record;
-	    if (this.parent) return this.parent.resolveName(name);
+	    if (record) {
+	      return record;
+	    }
+	    if (this.parent) {
+	      return this.parent.resolveName(name);
+	    }
 	    return null;
 	  }
 	}
@@ -4547,7 +4967,9 @@
 	    let free = this.top.free;
 	    let next = null;
 	    let freeList = [];
-	    if (this.stack.length > 0) next = this.stack[this.stack.length - 1];
+	    if (this.stack.length > 0) {
+	      next = this.stack[this.stack.length - 1];
+	    }
 	    this.top.free = freeList;
 	    free.forEach((r) => {
 	      let name = r.value;
@@ -4576,24 +4998,37 @@
 	    this.top = this.stack.pop();
 	    this.linkScope(scope);
 	    varNames.forEach((n) => {
-	      if (scope.names.has(n.value)) this.fail('Cannot shadow lexical declaration with var', n);
-	      else if (this.top.type === 'var') this.addName(n, 'var');
-	      else this.top[VarNames].push(n);
+	      if (scope.names.has(n.value)) {
+	        this.fail('Cannot shadow lexical declaration with var', n);
+	      } else if (this.top.type === 'var') {
+	        this.addName(n, 'var');
+	      } else {
+	        this.top[VarNames].push(n);
+	      }
 	    });
 	  }
 
 	  visit(node, kind) {
-	    if (!node) return;
+	    if (!node) {
+	      return;
+	    }
 	    let f = this[node.type];
-	    if (typeof f === 'function') f.call(this, node, kind);
-	    else forEachChild(node, (n) => this.visit(n, kind));
+	    if (typeof f === 'function') {
+	      f.call(this, node, kind);
+	    } else {
+	      forEachChild(node, (n) => this.visit(n, kind));
+	    }
 	  }
 
 	  hasStrictDirective(statements) {
 	    for (let i = 0; i < statements.length; ++i) {
 	      let n = statements[i];
-	      if (n.type !== 'Directive') break;
-	      if (n.value === 'use strict') return true;
+	      if (n.type !== 'Directive') {
+	        break;
+	      }
+	      if (n.value === 'use strict') {
+	        return true;
+	      }
 	    }
 	    return false;
 	  }
@@ -4619,25 +5054,36 @@
 	    this.popScope();
 	    this.popScope();
 	    paramScope.names.forEach((record, name) => {
-	      if (blockScope.names.has(name)) this.fail('Duplicate block declaration', blockScope.names.get(name).declarations[0]);
-	      if (strictParams && record.declarations.length > 1) this.fail('Duplicate parameter names', record.declarations[1]);
+	      if (blockScope.names.has(name)) {
+	        this.fail('Duplicate block declaration', blockScope.names.get(name).declarations[0]);
+	      }
+	      if (strictParams && record.declarations.length > 1) {
+	        this.fail('Duplicate parameter names', record.declarations[1]);
+	      }
 	    });
 	  }
 
 	  addReference(node) {
 	    let name = node.value;
 	    let record = this.top.names.get(name);
-	    if (record) record.references.push(node);
-	    else this.top.free.push(node);
+	    if (record) {
+	      record.references.push(node);
+	    } else {
+	      this.top.free.push(node);
+	    }
 	  }
 
 	  addName(node, kind) {
 	    let name = node.value;
 	    let record = this.top.names.get(name);
 	    if (record) {
-	      if (kind !== 'var' && kind !== 'param') this.fail('Duplicate variable declaration', node);
+	      if (kind !== 'var' && kind !== 'param') {
+	        this.fail('Duplicate variable declaration', node);
+	      }
 	    } else {
-	      if (name === 'let' && (kind === 'let' || kind === 'const')) this.fail('Invalid binding identifier', node);
+	      if (name === 'let' && (kind === 'let' || kind === 'const')) {
+	        this.fail('Invalid binding identifier', node);
+	      }
 	      this.top.names.set(name, record = {
 	        declarations: [],
 	        references: [],
@@ -4648,7 +5094,9 @@
 	  }
 
 	  Script(node) {
-	    if (this.hasStrictDirective(node.statements)) this.top.strict = true;
+	    if (this.hasStrictDirective(node.statements)) {
+	      this.top.strict = true;
+	    }
 	    this.pushScope('block', node);
 	    forEachChild(node, (n) => this.visit(n, 'var'));
 	    this.popScope();
@@ -4756,8 +5204,11 @@
 	        this.top.free.push(node);
 	        break;
 	      case 'declaration':
-	        if (kind === 'var' && this.top.type !== 'var') this.top[VarNames].push(node);
-	        else this.addName(node, kind);
+	        if (kind === 'var' && this.top.type !== 'var') {
+	          this.top[VarNames].push(node);
+	        } else {
+	          this.addName(node, kind);
+	        }
 	        break;
 	    }
 	  }
@@ -5160,21 +5611,7 @@
 	  return result;
 	}
 
-	function registerTransform({ define, templates, AST }) {
-	  define((rootPath) => rootPath.visit(new class AsyncBlockVisitor {
-	    AsyncBlock(path) {
-	      path.visitChildren(this);
-	      let arrow = new AST.ArrowFunction('async', [], new AST.FunctionBody(path.node.statements));
-	      path.replaceNode(new AST.ExpressionStatement(new AST.CallExpression(new AST.ParenExpression(arrow), [])));
-	    }
-	  }));
-	}
-
-	var AsyncBlockTransform = Object.freeze({
-	  registerTransform: registerTransform
-	});
-
-	function registerTransform$1({ define, context, templates, AST }) {
+	function registerTransform({ define, context, templates, AST }) {
 	  define((rootPath) => rootPath.visit(new class SymbolNameVisitor {
 	    constructor() {
 	      let names = context.get('symbolNames');
@@ -5204,10 +5641,10 @@
 	}
 
 	var SymbolNameTransform = Object.freeze({
-	  registerTransform: registerTransform$1
+	  registerTransform: registerTransform
 	});
 
-	function registerTransform$2({ define, templates, AST }) {
+	function registerTransform$1({ define, templates, AST }) {
 	  define((rootPath) => new ImportExportProcessor().execute(rootPath));
 
 	  class ImportExportProcessor {
@@ -5220,6 +5657,7 @@
 	      this.replacements = null;
 	      this.index = 0;
 	      this.topImport = null;
+	      this.metaName = null;
 	    }
 
 	    execute(rootPath) {
@@ -5257,15 +5695,38 @@
 	      }
 	    }
 
+	    hasTopLevelAwait() {
+	      let topLevelFound = {};
+	      try {
+	        this.rootPath.visit({
+	          FunctionBody() {},
+	          ArrowFunction() {},
+	          UnaryExpression(path) {
+	            if (path.node.operator === 'await') {
+	              throw topLevelFound;
+	            }
+	            path.visitChildren(this);
+	          }
+	        });
+	      } catch (err) {
+	        if (err === topLevelFound) {
+	          return true;
+	        }
+	        throw err;
+	      }
+	      return false;
+	    }
+
 	    Module(node) {
 	      let moduleScope = Parser_1.resolveScopes(node).children[0];
 	      let replaceMap = new Map();
+	      let { rootPath } = this;
 	      this.replacements = Array.from(node.statements);
 	      for (let i = 0; i < node.statements.length; ++i) {
 	        this.index = i;
 	        this.visit(node.statements[i]);
 	      }
-	      let statements = [new AST.Directive('use strict', new AST.StringLiteral('use strict'))];
+	      let statements = [];
 	      for (let { local, exported, hoist } of this.exports) {
 	        if (hoist) {
 	          statements.push(templates.statement`
@@ -5293,7 +5754,7 @@
 	        }
 	        let moduleName = this.moduleNames.get(from.value);
 	        if (!moduleName) {
-	          moduleName = this.rootPath.uniqueIdentifier('_' + from.value.replace(/.*[\/\\](?=[^\/\\]+$)/, '').replace(/\..*$/, '').replace(/[^a-zA-Z0-1_$]/g, '_'));
+	          moduleName = rootPath.uniqueIdentifier('_' + from.value.replace(/.*[\/\\](?=[^\/\\]+$)/, '').replace(/\..*$/, '').replace(/[^a-zA-Z0-1_$]/g, '_'));
 	          this.moduleNames.set(from.value, moduleName);
 	          statements.push(templates.statement`
             let ${moduleName} = require(${from})
@@ -5346,7 +5807,7 @@
 	        }
 	      }
 	      node.statements = statements;
-	      this.rootPath.visit({
+	      rootPath.visit({
 	        Identifier(path) {
 	          let expr = replaceMap.get(path.node);
 	          if (!expr) {
@@ -5375,11 +5836,42 @@
 	          }
 	        },
 	        ImportCall(path) {
+	          path.visitChildren(this);
 	          path.replaceNode(templates.expression`
             Promise.resolve(require(${path.node.argument}))
           `);
+	        },
+	        MetaProperty(path) {
+	          path.visitChildren(this);
+	          if (path.node.left !== 'import' || path.node.right !== 'meta') {
+	            return;
+	          }
+	          if (!this.metaName) {
+	            this.metaName = rootPath.uniqueIdentifier('importMeta', {
+	              kind: 'const',
+	              initializer: templates.expression`
+                ({
+                  require,
+                  dirname: __dirname,
+                  filename: __filename,
+                })
+              `.expression
+	            });
+	          }
+	          path.replaceNode(new AST.Identifier(this.metaName));
 	        }
 	      });
+	      rootPath.applyChanges();
+	      if (this.hasTopLevelAwait()) {
+	        if (this.exports.length > 0) {
+	          throw new Error('Module with top-level await cannot have exports');
+	        }
+	        let fn = new AST.FunctionExpression('async', null, [], new AST.FunctionBody(node.statements));
+	        node.statements = templates.statementList`
+          (${fn})().catch(err => setTimeout(() => { throw err; }, 0));
+        `;
+	      }
+	      node.statements.unshift(new AST.Directive('use strict', new AST.StringLiteral('use strict')));
 	    }
 
 	    ImportDeclaration(node) {
@@ -5547,10 +6039,10 @@
 	}
 
 	var ModuleTransform = Object.freeze({
-	  registerTransform: registerTransform$2
+	  registerTransform: registerTransform$1
 	});
 
-	function registerTransform$3({ define, context, templates, AST }) {
+	function registerTransform$2({ define, context, templates, AST }) {
 	  define((rootPath) => rootPath.visit(new class MethodExtractionVisitor {
 	    constructor() {
 	      this.helperName = context.get('methodExtractionHelper') || '';
@@ -5621,10 +6113,10 @@
 	}
 
 	var MethodExtractionTransform = Object.freeze({
-	  registerTransform: registerTransform$3
+	  registerTransform: registerTransform$2
 	});
 
-	function registerTransform$4({ define, templates, AST }) {
+	function registerTransform$3({ define, templates, AST }) {
 	  define((rootPath) => rootPath.visit(new class CallWithVisitor {
 	    CallWithExpression(path) {
 	      path.visitChildren(this);
@@ -5647,10 +6139,10 @@
 	}
 
 	var CallWithTransform = Object.freeze({
-	  registerTransform: registerTransform$4
+	  registerTransform: registerTransform$3
 	});
 
-	function registerTransform$5({ define, templates, AST }) {
+	function registerTransform$4({ define, templates, AST }) {
 	  define((rootPath) => rootPath.visit(new class NullCoalescingVisitor {
 	    BinaryExpression(path) {
 	      path.visitChildren(true);
@@ -5678,17 +6170,96 @@
 	}
 
 	var NullCoalescingTransform = Object.freeze({
+	  registerTransform: registerTransform$4
+	});
+
+	function registerTransform$5() {}
+
+	var AnnotationTransform = Object.freeze({
 	  registerTransform: registerTransform$5
 	});
 
-	function registerTransform$6() {}
+	function registerTransform$6({ define, context, templates, AST }) {
+	  define((rootPath) => rootPath.visit(new class ClassMixinVisitor {
+	    constructor() {
+	      this.helperName = context.get('classMixinHelper') || '';
+	    }
 
-	var AnnotationTransform = Object.freeze({
+	    insertHelper() {
+	      if (this.helperName) {
+	        return this.helperName;
+	      }
+	      this.helperName = rootPath.uniqueIdentifier('_classMixin', {
+	        kind: 'const',
+	        initializer: templates.expression`
+          (target, ...sources) => {
+            function copy(from, to, skip) {
+              for (let key of Reflect.ownKeys(from)) {
+                if (key === skip || Reflect.getOwnPropertyDescriptor(to, key)) {
+                  continue;
+                }
+                Reflect.defineProperty(
+                  to,
+                  key,
+                  Reflect.getOwnPropertyDescriptor(from, key)
+                );
+              }
+            }
+
+            for (let source of sources) {
+              copy(source, target, 'prototype');
+              if (source.prototype) {
+                copy(source.prototype, target.prototype, 'constructor');
+              }
+            }
+
+            return target;
+          }
+        `
+	      });
+	      context.set('classMixinHelper', this.helperName);
+	      return this.helperName;
+	    }
+
+	    ClassDeclaration(path) {
+	      path.visitChildren(this);
+	      let { node } = path;
+	      let { mixins } = node;
+	      if (!mixins) {
+	        return;
+	      }
+	      if (!node.identifier) {
+	        node.identifier = new AST.Identifier(path.uniqueIdentifier('_class'));
+	      }
+	      let name = new AST.Identifier(node.identifier.value);
+	      let helper = this.insertHelper();
+	      switch (path.parentNode.type) {
+	        case 'ExportDeclaration':
+	        case 'ExportDefault':
+	          path = path.parent;
+	          break;
+	      }
+	      path.insertNodesAfter(new AST.ExpressionStatement(new AST.CallExpression(new AST.Identifier(helper), [name, ...mixins])));
+	    }
+
+	    ClassExpression(path) {
+	      path.visitChildren(this);
+	      let { mixins } = path.node;
+	      if (!mixins) {
+	        return;
+	      }
+	      let helper = this.insertHelper();
+	      path.replaceNode(new AST.CallExpression(new AST.Identifier(helper), [path.node, ...mixins]));
+	    }
+	  }));
+	}
+
+	var ClassMixinTransform = Object.freeze({
 	  registerTransform: registerTransform$6
 	});
 
 	function getTransforms(options = {}) {
-	  let list = [AsyncBlockTransform, SymbolNameTransform, MethodExtractionTransform, CallWithTransform, NullCoalescingTransform, AnnotationTransform];
+	  let list = [SymbolNameTransform, MethodExtractionTransform, CallWithTransform, NullCoalescingTransform, AnnotationTransform, ClassMixinTransform];
 	  if (options.transformModules) {
 	    list.push(ModuleTransform);
 	  }
