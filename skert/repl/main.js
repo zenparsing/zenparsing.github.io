@@ -447,6 +447,7 @@ function main() {
   input.addEventListener('keydown', onKeyDown, false);
   input.addEventListener('paste', onPaste, false);
 
+  document.body.classList.remove('loading');
   input.focus();
 
   window.contentElement = elem('#content');
@@ -468,8 +469,6 @@ function main() {
   addLine(helpHTML);
 
   loadFromHash();
-
-  document.body.classList.remove('loading');
 }
 
 window.onload = main;
